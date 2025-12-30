@@ -1,4 +1,4 @@
-# Yapilacaklar Listesi
+# Todo App Yavuzlar
 
 Todo-App-Yavuzlar, HTML + CSS + JS (Vanilla) kullanıldı.
 
