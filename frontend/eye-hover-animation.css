@@ -1,0 +1,205 @@
+/* ========================================
+   EYE HOVER PROGRESSIVE UUID REVEAL ANIMATION
+   Layered circular zones with mouse-speed responsive effects
+   ======================================== */
+
+/* Enhanced eye icon styling */
+.eye-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.3s ease;
+    user-select: none;
+    z-index: 10;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2)) 
+            drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+}
+
+.eye-icon:hover {
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3)) 
+            drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    transform: translateY(-50%) scale(1.05);
+}
+
+/* UUID Input wrapper enhanced for hover detection */
+.uuid-input-wrapper {
+    position: relative;
+    overflow: visible;
+}
+
+/* UUID Input enhanced for animation */
+.uuid-input-wrapper input[type="password"],
+.uuid-input-wrapper input[type="text"] {
+    font-family: 'VT323', monospace;
+    letter-spacing: 1.5px;
+    transition: all 0.2s ease;
+    position: relative;
+    z-index: 1;
+}
+
+/* Hidden detection zones around eye icon */
+.eye-hover-zone {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    z-index: 5;
+}
+
+/* Zone visualization (only for debugging - remove in production) */
+.eye-hover-zone::before,
+.eye-hover-zone::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* Outer zone - 5cm radius (50px) */
+.eye-hover-zone::before {
+    width: 100px;
+    height: 100px;
+    border: 1px dashed rgba(0, 0, 0, 0.1);
+}
+
+/* Middle zone - 3cm radius (30px) */
+.eye-hover-zone::after {
+    width: 60px;
+    height: 60px;
+    border: 1px dashed rgba(0, 0, 0, 0.15);
+}
+
+/* Animation classes for different states */
+.uuid-input-animated {
+    position: relative;
+}
+
+.uuid-input-animated.outer-zone {
+    animation: outerZoneReveal 0.3s ease-out;
+}
+
+.uuid-input-animated.middle-zone {
+    animation: middleZoneReveal 0.2s ease-out;
+}
+
+.uuid-input-animated.inner-zone {
+    animation: innerZoneReveal 0.5s ease-out;
+}
+
+.uuid-input-animated.exiting {
+    animation: exitAnimation 0.2s ease-out;
+}
+
+/* Keyframes for different zone animations */
+@keyframes outerZoneReveal {
+    0% {
+        filter: blur(0px);
+    }
+    50% {
+        filter: blur(0.5px);
+    }
+    100% {
+        filter: blur(0px);
+    }
+}
+
+@keyframes middleZoneReveal {
+    0% {
+        filter: blur(0.5px);
+    }
+    100% {
+        filter: blur(0px);
+    }
+}
+
+@keyframes innerZoneReveal {
+    0% {
+        filter: blur(0.5px);
+        opacity: 0.8;
+    }
+    100% {
+        filter: blur(0px);
+        opacity: 1;
+    }
+}
+
+@keyframes exitAnimation {
+    0% {
+        filter: blur(0px);
+    }
+    100% {
+        filter: blur(0px);
+    }
+}
+
+/* Character reveal animation for progressive unveiling */
+.uuid-char-reveal {
+    display: inline-block;
+    transition: all 0.1s ease;
+    position: relative;
+}
+
+.uuid-char-reveal.revealing {
+    animation: charFlicker 0.05s infinite alternate;
+}
+
+.uuid-char-reveal.revealed {
+    animation: none;
+    color: inherit;
+}
+
+@keyframes charFlicker {
+    0% {
+        opacity: 0.7;
+        transform: scale(0.98);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1.02);
+    }
+}
+
+/* Hover feedback for different zones */
+.eye-icon.zone-outer {
+    filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.25)) 
+            drop-shadow(0 1px 3px rgba(0, 0, 0, 0.15));
+}
+
+.eye-icon.zone-middle {
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3)) 
+            drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    transform: translateY(-50%) scale(1.08);
+}
+
+.eye-icon.zone-inner {
+    filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.4)) 
+            drop-shadow(0 3px 6px rgba(0, 0, 0, 0.3));
+    transform: translateY(-50%) scale(1.12);
+}
+
+/* Smooth transitions for all zone changes */
+.eye-icon,
+.uuid-input-wrapper input {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Performance optimization */
+.uuid-input-wrapper {
+    will-change: transform;
+    backface-visibility: hidden;
+    perspective: 1000px;
+}
+
+.eye-icon {
+    will-change: transform, filter;
+    backface-visibility: hidden;
+}

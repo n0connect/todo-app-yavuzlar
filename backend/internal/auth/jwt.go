@@ -1,0 +1,235 @@
+package auth
+
+import (
+	"errors"
+	"time"
+
+	"todo-app-backend/internal/config"
+	"todo-app-backend/internal/utils"
+
+	"github.com/golang-jwt/jwt/v5"
+)
+
+var (
+	ErrInvalidToken = errors.New("invalid token")
+	ErrExpiredToken = errors.New("token expired")
+	jwtLogger       = utils.NewLogger("JWT")
+)
+
+const (
+	// Issuer identifies who created and signed the token
+	TokenIssuer = "todo-app-backend"
+	// Audience identifies the recipients the token is intended for
+	TokenAudience = "todo-app-frontend"
+	// Minimum secret length for security (256 bits = 32 bytes)
+	MinSecretLength = 32
+)
+
+// Claims represents JWT claims with security best practices
+// Uses RegisteredClaims.Subject for user UUID (standard "sub" claim)
+type Claims struct {
+	jwt.RegisteredClaims
+}
+
+// PendingRegistrationClaims represents JWT claims for pending registration
+// Contains the UUID that was generated but account not yet created
+type PendingRegistrationClaims struct {
+	jwt.RegisteredClaims
+	PendingUUID string `json:"pending_uuid"`
+	IsPending   bool   `json:"is_pending"`
+}
+
+// validateSecret ensures JWT secret meets security requirements
+func validateSecret(secret string) error {
+	if secret == "" {
+		return errors.New("JWT_SECRET not configured")
+	}
+	if len(secret) < MinSecretLength {
+		return errors.New("JWT_SECRET too short (minimum 32 characters)")
+	}
+	return nil
+}
+
+// SignToken creates a JWT token for the given user UUID
+// Security: Uses HS256, includes iss/aud/iat/exp/nbf claims
+func SignToken(userUUID string) (string, error) {
+	jwtLogger.Debug("SignToken: starting token generation for userUUID: %s", userUUID)
+
+	secret := config.GetJWTSecret()
+	if err := validateSecret(secret); err != nil {
+		jwtLogger.Error("SignToken: %v", err)
+		return "", err
+	}
+
+	expiration := config.GetJWTExpiration()
+	now := time.Now()
+	jwtLogger.Debug("SignToken: expiration duration: %v, issued at: %v", expiration, now)
+
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    TokenIssuer,
+			Audience:  jwt.ClaimStrings{TokenAudience},
+			Subject:   userUUID,
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(expiration)),
+			NotBefore: jwt.NewNumericDate(now),
+		},
+	}
+
+	// Use HS256 (HMAC-SHA256) - symmetric signing
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(secret))
+	if err != nil {
+		jwtLogger.LogError("SignToken", err)
+		jwtLogger.Error("SignToken: failed to sign token for userUUID: %s", userUUID)
+		return "", err
+	}
+
+	jwtLogger.Debug("SignToken: successfully generated token for userUUID: %s tokenLength=%d", userUUID, len(tokenString))
+	return tokenString, nil
+}
+
+// SignPendingRegistrationToken creates a short-lived JWT for pending registration
+// This token contains the UUID that was generated but account not yet confirmed
+// Security: Short expiration (5 minutes), contains is_pending flag
+func SignPendingRegistrationToken(pendingUUID string) (string, error) {
+	jwtLogger.Debug("SignPendingRegistrationToken: starting for pendingUUID: %s", pendingUUID)
+
+	secret := config.GetJWTSecret()
+	if err := validateSecret(secret); err != nil {
+		jwtLogger.Error("SignPendingRegistrationToken: %v", err)
+		return "", err
+	}
+
+	now := time.Now()
+	// Short expiration - 5 minutes for pending registration
+	expiration := 5 * time.Minute
+
+	claims := PendingRegistrationClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    TokenIssuer,
+			Audience:  jwt.ClaimStrings{TokenAudience},
+			Subject:   "pending_registration",
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(expiration)),
+			NotBefore: jwt.NewNumericDate(now),
+		},
+		PendingUUID: pendingUUID,
+		IsPending:   true,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(secret))
+	if err != nil {
+		jwtLogger.LogError("SignPendingRegistrationToken", err)
+		return "", err
+	}
+
+	jwtLogger.Debug("SignPendingRegistrationToken: successfully generated for pendingUUID: %s", pendingUUID)
+	return tokenString, nil
+}
+
+// VerifyPendingRegistrationToken verifies a pending registration token and returns the pending UUID
+// Returns error if token is not a pending registration token or is invalid/expired
+func VerifyPendingRegistrationToken(tokenString string) (string, error) {
+	jwtLogger.Debug("VerifyPendingRegistrationToken: starting verification")
+
+	secret := config.GetJWTSecret()
+	if err := validateSecret(secret); err != nil {
+		jwtLogger.Error("VerifyPendingRegistrationToken: %v", err)
+		return "", err
+	}
+
+	token, err := jwt.ParseWithClaims(tokenString, &PendingRegistrationClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			jwtLogger.Warn("VerifyPendingRegistrationToken: unexpected signing method: %v", token.Method.Alg())
+			return nil, errors.New("unexpected signing method")
+		}
+		return []byte(secret), nil
+	}, jwt.WithValidMethods([]string{"HS256"}),
+		jwt.WithIssuer(TokenIssuer),
+		jwt.WithAudience(TokenAudience),
+		jwt.WithExpirationRequired(),
+	)
+
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			jwtLogger.Warn("VerifyPendingRegistrationToken: token expired")
+			return "", ErrExpiredToken
+		}
+		jwtLogger.LogError("VerifyPendingRegistrationToken", err)
+		return "", ErrInvalidToken
+	}
+
+	claims, ok := token.Claims.(*PendingRegistrationClaims)
+	if !ok || !token.Valid {
+		jwtLogger.Warn("VerifyPendingRegistrationToken: invalid claims")
+		return "", ErrInvalidToken
+	}
+
+	// Verify this is a pending registration token
+	if !claims.IsPending || claims.Subject != "pending_registration" {
+		jwtLogger.Warn("VerifyPendingRegistrationToken: not a pending registration token")
+		return "", ErrInvalidToken
+	}
+
+	if claims.PendingUUID == "" {
+		jwtLogger.Warn("VerifyPendingRegistrationToken: pending UUID is empty")
+		return "", ErrInvalidToken
+	}
+
+	jwtLogger.Debug("VerifyPendingRegistrationToken: verified pendingUUID: %s", claims.PendingUUID)
+	return claims.PendingUUID, nil
+}
+
+// VerifyToken verifies a JWT token and returns the user UUID
+// Security: Validates signing method, issuer, audience, and expiration
+func VerifyToken(tokenString string) (string, error) {
+	jwtLogger.Debug("VerifyToken: starting token verification, tokenLength=%d", len(tokenString))
+
+	secret := config.GetJWTSecret()
+	if err := validateSecret(secret); err != nil {
+		jwtLogger.Error("VerifyToken: %v", err)
+		return "", err
+	}
+
+	// Parse with explicit validation options
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		// CRITICAL: Validate signing method to prevent algorithm confusion attacks
+		// Only accept HMAC (HS256/HS384/HS512), reject RS256, ES256, none, etc.
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			jwtLogger.Warn("VerifyToken: unexpected signing method: %v", token.Method.Alg())
+			return nil, errors.New("unexpected signing method")
+		}
+		return []byte(secret), nil
+	}, jwt.WithValidMethods([]string{"HS256"}), // Explicitly allow only HS256
+		jwt.WithIssuer(TokenIssuer),     // Validate issuer
+		jwt.WithAudience(TokenAudience), // Validate audience
+		jwt.WithExpirationRequired(),    // Require expiration
+	)
+
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			jwtLogger.Warn("VerifyToken: token expired")
+			return "", ErrExpiredToken
+		}
+		jwtLogger.LogError("VerifyToken", err)
+		jwtLogger.Warn("VerifyToken: invalid token")
+		return "", ErrInvalidToken
+	}
+
+	claims, ok := token.Claims.(*Claims)
+	if !ok || !token.Valid {
+		jwtLogger.Warn("VerifyToken: token claims invalid or token not valid")
+		return "", ErrInvalidToken
+	}
+
+	// Validate Subject is not empty
+	if claims.Subject == "" {
+		jwtLogger.Warn("VerifyToken: Subject claim is empty")
+		return "", ErrInvalidToken
+	}
+
+	jwtLogger.Debug("VerifyToken: successfully verified token for userUUID: %s", claims.Subject)
+	return claims.Subject, nil
+}

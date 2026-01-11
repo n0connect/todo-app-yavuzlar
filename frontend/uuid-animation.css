@@ -1,0 +1,95 @@
+/* ========================================
+   FAKE UUID GENERATION ANIMATION
+   ======================================== */
+
+.uuid-box {
+    margin: 20px 0;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s ease;
+}
+
+.uuid-box.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.uuid-box code {
+    display: block;
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    letter-spacing: 2px;
+    padding: 15px;
+    border: 2px solid var(--border);
+    background: var(--bg-secondary);
+    border-radius: 5px;
+    transition: all 0.3s ease;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Subtle generating animation - theme compatible */
+.uuid-box code.generating {
+    border-color: var(--fg-muted);
+    color: var(--fg);
+}
+
+/* Masking animation state */
+.uuid-box code.masking {
+    color: var(--fg-muted);
+    border-color: var(--border);
+}
+
+/* Revealed state - after real UUID is shown */
+.uuid-box code.revealed {
+    animation: subtleReveal 0.6s ease-out;
+    border-color: var(--border);
+    color: var(--fg);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 
+                0 0 40px rgba(0, 0, 0, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+@keyframes subtleReveal {
+    0% {
+        opacity: 0.3;
+        transform: scale(0.98);
+        box-shadow: none;
+    }
+    50% {
+        box-shadow: 0 6px 30px rgba(0, 0, 0, 0.4);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 
+                    0 0 40px rgba(0, 0, 0, 0.1),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+}
+
+/* Continue button disabled state */
+#continueBtn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+#continueBtn:disabled:hover {
+    transform: none;
+}
+
+/* Cancel registration button */
+.cancel-reg-btn {
+    margin-top: 25px;
+    font-size: 12px;
+    color: var(--fg-muted);
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.cancel-reg-btn:hover {
+    opacity: 1;
+    color: var(--fg);
+}

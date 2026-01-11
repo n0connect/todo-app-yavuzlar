@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>todo.app</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="uuid-animation.css">
+    <link rel="stylesheet" href="eye-hover-animation.css">
+    <link rel="stylesheet" href="secure-hover-animation.css">
+</head>
+<body>
+    <div class="container">
+        <!-- MAIN MENU -->
+        <div class="main-menu" id="mainMenu">
+            <div class="brand">
+                <h1 class="brand-title">todo.app</h1>
+                <p class="tagline">simple. <span class="secure-text" data-text="secure">secure</span>. minimal.</p>
+            </div>
+            
+            <div class="main-buttons">
+                <button id="showLoginBtn" class="menu-btn primary-btn">login</button>
+                <button id="showRegisterFormBtn" class="menu-btn secondary-btn">register</button>
+            </div>
+            
+            <footer class="login-footer">
+                <p>encrypted with aes-256-gcm</p>
+            </footer>
+        </div>
+
+        <!-- LOGIN -->
+        <div class="login-container" id="loginContainer" style="display: none;">
+            <div class="brand">
+                <h1 class="brand-title clickable" id="loginBrandTitle">todo.app</h1>
+                <p class="tagline">simple. <span class="secure-text" data-text="secure">secure</span>. minimal.</p>
+            </div>
+            
+            <div class="login-form" id="loginForm">
+                <p class="login-info">enter your 24-character uuid</p>
+                <div class="login-input-group">
+                    <div class="uuid-input-wrapper">
+                        <input type="password" id="uuidInput" placeholder="xxxxxxxxxxxxxxxxxxxxxxxx" maxlength="24" spellcheck="false" autocomplete="off">
+                        <span class="eye-icon" id="eyeIcon">👁</span>
+                    </div>
+                    <button id="loginBtn" class="primary-btn">login</button>
+                </div>
+                <p id="loginError" class="error"></p>
+                <p id="loginSuccess" class="success"></p>
+                <button id="backToMenuFromLogin" class="text-btn">← back to main menu</button>
+            </div>
+            
+            <footer class="login-footer">
+                <p>encrypted with aes-256-gcm</p>
+            </footer>
+        </div>
+
+        <!-- REGISTER -->
+        <div class="register-container" id="registerContainer" style="display: none;">
+            <div class="brand">
+                <h1 class="brand-title clickable" id="registerBrandTitle">todo.app</h1>
+                <p class="tagline">simple. <span class="secure-text" data-text="secure">secure</span>. minimal.</p>
+            </div>
+            
+            <div class="register-form" id="registerForm">
+                <p class="login-info">generating your unique identifier...</p>
+                <p id="registerError" class="error"></p>
+                <p id="registerSuccess" class="success"></p>
+                <div id="uuidDisplay" class="uuid-display">
+                    <p class="uuid-label">your uuid</p>
+                    <div class="uuid-box">
+                        <code id="generatedUUID"></code>
+                        <button id="copyBtn" class="copy-btn">copy</button>
+                    </div>
+                    <p class="uuid-warning">⚠️ save this uuid — it's your only way to access your todos!</p>
+                    <button id="continueBtn" class="primary-btn" disabled>continue →</button>
+                </div>
+                <button id="cancelRegistration" class="text-btn cancel-reg-btn">✕ cancel registration</button>
+            </div>
+            
+            <footer class="login-footer">
+                <p>encrypted with aes-256-gcm</p>
+            </footer>
+        </div>
+
+        <!-- APP -->
+        <div class="app-container" id="appContainer" style="display: none;">
+            <header>
+                <div class="brand-small">todo.app</div>
+                <button id="logoutBtn" class="text-btn">logout</button>
+            </header>
+            
+            <div class="input-section">
+                <div class="add-todo">
+                    <textarea id="todoInput" placeholder="what needs to be done?" rows="1" spellcheck="true"></textarea>
+                    <button id="addTodoBtn" class="add-btn" title="Add todo">+</button>
+                </div>
+                <!-- Hidden inputs for advanced options -->
+                <input type="hidden" id="prioritySelect" value="medium">
+                <input type="hidden" id="dueDateInput" value="">
+                <input type="hidden" id="tagsInput" value="">
+            </div>
+
+            <div class="filters">
+                <button id="filterAll" class="filter-btn active">all</button>
+                <button id="filterActive" class="filter-btn">active</button>
+                <button id="filterCompleted" class="filter-btn">done</button>
+                <select id="sortSelect" class="sort-select">
+                    <option value="created">↕ newest</option>
+                    <option value="due">↕ due date</option>
+                    <option value="priority">↕ priority</option>
+                    <option value="alpha">↕ a-z</option>
+                </select>
+            </div>
+
+            <div id="tagFilters" class="tag-filters"></div>
+
+            <ul id="todoList" class="todo-list"></ul>
+
+            <div class="todo-footer">
+                <span id="todoCount">0 items</span>
+                <button id="clearCompletedBtn" class="text-btn">clear done</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/utils.js"></script>
+    <script src="js/notifications.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/todo.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+    <script src="validation.js"></script>
+    <script src="eye-hover-animation.js"></script>
+    <script src="secure-hover-animation.js"></script>
+    <!-- Notification Container -->
+    <div id="notificationContainer" class="notification-container"></div>
+
+</body>
+</html>

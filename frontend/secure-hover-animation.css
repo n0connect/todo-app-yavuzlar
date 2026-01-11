@@ -1,0 +1,36 @@
+/* ========================================
+   SECURE TEXT HOVER ANIMATION STYLES
+   ======================================== */
+
+.secure-text {
+    display: inline;
+    cursor: default;
+    font-family: 'VT323', monospace;
+    letter-spacing: 1px;
+    transition: color 0.2s ease;
+}
+
+.secure-text:hover {
+    color: var(--fg);
+}
+
+.secure-text.scrambling {
+    color: var(--fg-muted);
+}
+
+.secure-text.revealed {
+    color: var(--fg);
+}
+
+/* Brand title clickable styles */
+.brand-title {
+    transition: opacity 0.2s ease;
+}
+
+.brand-title.clickable {
+    cursor: pointer;
+}
+
+.brand-title.clickable:hover {
+    opacity: 0.7;
+}
