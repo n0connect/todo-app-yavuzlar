@@ -42,35 +42,35 @@ run_tests_in_docker() {
     echo "📦 Starting test container..."
     docker compose run --rm backend sh -c "
         echo '🧪 Running migration tests...'
-        go test ./tests/database -v || exit 1
+        go test -tags test ./tests/database -v || exit 1
         
         echo ''
         echo '🧪 Running authentication tests...'
-        go test ./tests/auth -v || exit 1
+        go test -tags test ./tests/auth -v || exit 1
         
         echo ''
         echo '🧪 Running encryption tests...'
-        go test ./tests/encryption -v || exit 1
+        go test -tags test ./tests/encryption -v || exit 1
         
         echo ''
         echo '🧪 Running middleware tests...'
-        go test ./tests/middleware -v || exit 1
+        go test -tags test ./tests/middleware -v || exit 1
         
         echo ''
         echo '🧪 Running todo service tests...'
-        go test ./tests/todo -v || exit 1
+        go test -tags test ./tests/todo -v || exit 1
         
         echo ''
         echo '🧪 Running integration tests...'
-        go test ./tests/integration -v || exit 1
+        go test -tags test ./tests/integration -v || exit 1
         
         echo ''
         echo '🧪 Running handler tests...'
-        go test ./tests/handlers -v || exit 1
+        go test -tags test ./tests/handlers -v || exit 1
         
         echo ''
         echo '🧪 Running utils tests...'
-        go test ./tests/utils -v || exit 1
+        go test -tags test ./tests/utils -v || exit 1
         
         echo ''
         echo '✅ All tests passed!'
@@ -82,35 +82,35 @@ run_tests_local() {
     echo ""
     echo "🧪 Running migration tests (MUST PASS FIRST)..."
     cd backend
-    go test ./tests/database -v || exit 1
+    go test -tags test ./tests/database -v || exit 1
     
     echo ""
     echo "🧪 Running authentication tests..."
-    go test ./tests/auth -v || exit 1
+    go test -tags test ./tests/auth -v || exit 1
     
     echo ""
     echo "🧪 Running encryption tests..."
-    go test ./tests/encryption -v || exit 1
+    go test -tags test ./tests/encryption -v || exit 1
     
     echo ""
     echo "🧪 Running middleware tests..."
-    go test ./tests/middleware -v || exit 1
+    go test -tags test ./tests/middleware -v || exit 1
     
     echo ""
     echo "🧪 Running todo service tests..."
-    go test ./tests/todo -v || exit 1
+    go test -tags test ./tests/todo -v || exit 1
     
     echo ""
     echo "🧪 Running integration tests..."
-    go test ./tests/integration -v || exit 1
+    go test -tags test ./tests/integration -v || exit 1
     
     echo ""
     echo "🧪 Running handler tests..."
-    go test ./tests/handlers -v || exit 1
+    go test -tags test ./tests/handlers -v || exit 1
     
     echo ""
     echo "🧪 Running utils tests..."
-    go test ./tests/utils -v || exit 1
+    go test -tags test ./tests/utils -v || exit 1
     
     echo ""
     echo "✅ All tests passed!"

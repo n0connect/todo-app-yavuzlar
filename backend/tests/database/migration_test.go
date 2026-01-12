@@ -147,16 +147,18 @@ func TestUserTableIndexes(t *testing.T) {
 
 	database.Init()
 
-	// Check unique index on uuid
-	hasUUIDIndex := database.DB.Migrator().HasIndex(&models.User{}, "uuid")
-	if !hasUUIDIndex {
-		t.Error("users table should have unique index on 'uuid'")
+	// Check unique index on uuid using raw SQL (GORM HasIndex may not work correctly)
+	var uuidIndexCount int64
+	database.DB.Raw("SELECT count(*) FROM pg_indexes WHERE tablename = 'users' AND indexname = 'idx_users_uuid' AND schemaname = CURRENT_SCHEMA()").Scan(&uuidIndexCount)
+	if uuidIndexCount == 0 {
+		t.Error("users table should have unique index 'idx_users_uuid' on 'uuid'")
 	}
 
 	// Check unique index on account_lookup
-	hasAccountLookupIndex := database.DB.Migrator().HasIndex(&models.User{}, "account_lookup")
-	if !hasAccountLookupIndex {
-		t.Error("users table should have unique index on 'account_lookup'")
+	var accountLookupIndexCount int64
+	database.DB.Raw("SELECT count(*) FROM pg_indexes WHERE tablename = 'users' AND indexname = 'idx_users_account_lookup' AND schemaname = CURRENT_SCHEMA()").Scan(&accountLookupIndexCount)
+	if accountLookupIndexCount == 0 {
+		t.Error("users table should have unique index 'idx_users_account_lookup' on 'account_lookup'")
 	}
 }
 
@@ -191,38 +193,27 @@ func TestDatabaseConstraints(t *testing.T) {
 	database.Init()
 
 	// Test NOT NULL constraint on account_lookup
-	// This should fail if constraint is not set
-	user := &models.User{
-		UUID: "test-uuid-123456789012",
-		// AccountLookup is missing - should fail
-		AccountHash:   "test-hash",
-		EncryptedKey:  "test-key",
-	}
-
-	err := database.DB.Create(user).Error
+	// Use raw SQL to insert NULL value (GORM may convert empty string to empty string, not NULL)
+	var result int64
+	err := database.DB.Raw("INSERT INTO users (uuid, account_lookup, account_hash, encrypted_key, created_at, updated_at) VALUES (?, NULL, ?, ?, NOW(), NOW()) RETURNING id",
+		"test-uuid-123456789012", "test-hash", "test-key").Scan(&result).Error
 	if err == nil {
-		t.Error("Creating user without account_lookup should fail (NOT NULL constraint)")
+		t.Error("Creating user with NULL account_lookup should fail (NOT NULL constraint)")
 		// Clean up if somehow created
-		database.DB.Delete(user)
+		database.DB.Exec("DELETE FROM users WHERE id = ?", result)
 	} else {
-		t.Logf("Expected error when creating user without account_lookup: %v", err)
+		t.Logf("Expected error when creating user with NULL account_lookup: %v", err)
 	}
 
 	// Test NOT NULL constraint on account_hash
-	user2 := &models.User{
-		UUID:         "test-uuid-987654321098",
-		AccountLookup: "test-lookup",
-		// AccountHash is missing - should fail
-		EncryptedKey: "test-key",
-	}
-
-	err = database.DB.Create(user2).Error
+	err = database.DB.Raw("INSERT INTO users (uuid, account_lookup, account_hash, encrypted_key, created_at, updated_at) VALUES (?, ?, NULL, ?, NOW(), NOW()) RETURNING id",
+		"test-uuid-987654321098", "test-lookup", "test-key").Scan(&result).Error
 	if err == nil {
-		t.Error("Creating user without account_hash should fail (NOT NULL constraint)")
+		t.Error("Creating user with NULL account_hash should fail (NOT NULL constraint)")
 		// Clean up if somehow created
-		database.DB.Delete(user2)
+		database.DB.Exec("DELETE FROM users WHERE id = ?", result)
 	} else {
-		t.Logf("Expected error when creating user without account_hash: %v", err)
+		t.Logf("Expected error when creating user with NULL account_hash: %v", err)
 	}
 }
 

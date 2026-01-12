@@ -1,3 +1,6 @@
+//go:build test
+// +build test
+
 package middleware
 
 import (
@@ -13,6 +16,9 @@ import (
 func TestRateLimitMiddleware_WithinLimit(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
+
+	// Reset rate limiter to ensure clean state
+	middleware.ResetRateLimiterForTesting()
 
 	req := httptest.NewRequest("POST", "/api/v1/login", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
@@ -40,6 +46,9 @@ func TestRateLimitMiddleware_WithinLimit(t *testing.T) {
 func TestRateLimitMiddleware_ExceedsLimit(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
+
+	// Reset rate limiter to ensure clean state
+	middleware.ResetRateLimiterForTesting()
 
 	req := httptest.NewRequest("POST", "/api/v1/login", nil)
 	req.RemoteAddr = "127.0.0.1:54321"
@@ -75,6 +84,9 @@ func TestRateLimitMiddleware_ExceedsLimit(t *testing.T) {
 func TestRateLimitMiddleware_DifferentIPs(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
+
+	// Reset rate limiter to ensure clean state
+	middleware.ResetRateLimiterForTesting()
 
 	handlerCalled1 := false
 	handlerCalled2 := false
@@ -115,6 +127,9 @@ func TestRateLimitMiddleware_XRealIP(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
 
+	// Reset rate limiter to ensure clean state
+	middleware.ResetRateLimiterForTesting()
+
 	req := httptest.NewRequest("POST", "/api/v1/login", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("X-Real-IP", "192.168.1.100") // Trusted proxy header
@@ -142,6 +157,9 @@ func TestRateLimitMiddleware_XRealIP(t *testing.T) {
 func TestRateLimitMiddleware_TokenRefill(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
+
+	// Reset rate limiter to ensure clean state
+	middleware.ResetRateLimiterForTesting()
 
 	req := httptest.NewRequest("POST", "/api/v1/login", nil)
 	req.RemoteAddr = "127.0.0.1:99999"

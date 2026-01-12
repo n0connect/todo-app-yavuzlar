@@ -1,12 +1,17 @@
+//go:build test
+// +build test
+
 package testutil
 
 import (
+	"encoding/hex"
 	"fmt"
 	"os"
 	"testing"
 
 	"todo-app-backend/internal/config"
 	"todo-app-backend/internal/database"
+	"todo-app-backend/internal/encryption"
 	"todo-app-backend/internal/models"
 
 	"gorm.io/driver/postgres"
@@ -119,6 +124,7 @@ func CleanTestDatabase(t *testing.T, db *gorm.DB) {
 
 // InitializeTestDatabase initializes the global database connection for tests
 // This should be called once before running tests that require database
+// It also resets global state (rate limiter, pending store) for test isolation
 func InitializeTestDatabase(t *testing.T) {
 	t.Helper()
 
@@ -127,4 +133,90 @@ func InitializeTestDatabase(t *testing.T) {
 
 	// Initialize database (this sets database.DB and database.EncryptionKey)
 	database.Init()
+
+	// Reset global state for test isolation
+	// This ensures each test starts with a clean state
+	resetGlobalStateForTesting(t)
+}
+
+// resetGlobalStateForTesting resets all global state that could affect test isolation
+// SECURITY: This function calls test-only reset functions that are only available
+// when compiled with -tags test. In production builds, these functions don't exist.
+func resetGlobalStateForTesting(t *testing.T) {
+	t.Helper()
+
+	// Reset rate limiter (prevents rate limit state from affecting tests)
+	// SECURITY: ResetRateLimiterForTesting is only available in test builds
+	// It will NOT be compiled into production binaries
+	resetRateLimiterForTesting()
+
+	// Reset pending store (prevents pending registrations from affecting tests)
+	// SECURITY: ResetPendingStoreForTesting is only available in test builds
+	// It will NOT be compiled into production binaries
+	resetPendingStoreForTesting()
+}
+
+// CleanupTestData removes all test data (users and todos) created during tests
+// This should be called in defer after each test that creates data
+func CleanupTestData(t *testing.T) {
+	t.Helper()
+
+	if database.DB == nil {
+		return
+	}
+
+	// Delete all todos first (foreign key constraint)
+	if err := database.DB.Exec("DELETE FROM todos").Error; err != nil {
+		t.Logf("Failed to cleanup todos: %v", err)
+	}
+
+	// Delete all users
+	if err := database.DB.Exec("DELETE FROM users").Error; err != nil {
+		t.Logf("Failed to cleanup users: %v", err)
+	}
+}
+
+// CleanupTestUser removes a specific test user by UUID
+func CleanupTestUser(t *testing.T, userUUID string) {
+	t.Helper()
+
+	if database.DB == nil {
+		return
+	}
+
+	// Delete user's todos first
+	if err := database.DB.Exec("DELETE FROM todos WHERE user_uuid = ?", userUUID).Error; err != nil {
+		t.Logf("Failed to cleanup todos for user %s: %v", userUUID, err)
+	}
+
+	// Delete user
+	if err := database.DB.Exec("DELETE FROM users WHERE uuid = ?", userUUID).Error; err != nil {
+		t.Logf("Failed to cleanup user %s: %v", userUUID, err)
+	}
+}
+
+// GenerateTestEncryptedKey generates a valid encrypted key for testing
+// This mimics the real registration flow where a user AES key is generated,
+// encoded to hex, and then encrypted with the master key
+// NOTE: This function is kept for backward compatibility, but new tests should
+// use RegisterTestUser to test the actual system behavior
+func GenerateTestEncryptedKey(t *testing.T) string {
+	t.Helper()
+
+	// Generate user AES key (32 bytes)
+	userAESKey, err := encryption.GenerateUserAESKey()
+	if err != nil {
+		t.Fatalf("Failed to generate user AES key: %v", err)
+	}
+
+	// Convert to hex string
+	userKeyHex := hex.EncodeToString(userAESKey)
+
+	// Encrypt with master key
+	encryptedUserKey, err := encryption.EncryptWithMasterKey(userKeyHex)
+	if err != nil {
+		t.Fatalf("Failed to encrypt user key: %v", err)
+	}
+
+	return encryptedUserKey
 }

@@ -114,3 +114,12 @@ func cleanupExpiredPending() {
 		}
 	}
 }
+
+// StopCleanup stops the background cleanup goroutine gracefully
+// This should be called during application shutdown to prevent resource leaks
+func StopCleanup() {
+	if cleanupTicker != nil {
+		cleanupTicker.Stop()
+		pendingStoreLogger.Debug("Stopped background cleanup goroutine")
+	}
+}

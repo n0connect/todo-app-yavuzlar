@@ -92,23 +92,37 @@ func (rl *RateLimiter) getBucket(ip string) *TokenBucket {
 		rl.mu.Unlock()
 	}
 
-	// SECURITY: Periodic cleanup check inside lock to prevent race conditions
-	rl.mu.Lock()
+	// SECURITY: Periodic cleanup check (without lock to avoid deadlock)
+	// Cleanup is safe to call without lock since it acquires its own lock
 	now := time.Now()
-	if now.Sub(rl.lastCleanup) > rl.cleanupInterval {
-		rl.cleanup()
-		rl.lastCleanup = now
+	rl.mu.RLock()
+	needsCleanup := now.Sub(rl.lastCleanup) > rl.cleanupInterval
+	rl.mu.RUnlock()
+
+	if needsCleanup {
+		rl.mu.Lock()
+		// Double-check after acquiring write lock
+		if now.Sub(rl.lastCleanup) > rl.cleanupInterval {
+			rl.cleanupUnsafe() // Call cleanup without lock since we already hold it
+			rl.lastCleanup = now
+		}
+		rl.mu.Unlock()
 	}
-	rl.mu.Unlock()
 
 	return bucket
 }
 
 // cleanup removes old buckets (simple: remove all, they'll be recreated if needed)
+// This function acquires its own lock
 func (rl *RateLimiter) cleanup() {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
+	rl.cleanupUnsafe()
+}
 
+// cleanupUnsafe removes old buckets without acquiring a lock
+// Caller must hold rl.mu.Lock()
+func (rl *RateLimiter) cleanupUnsafe() {
 	// Simple cleanup: if we have too many buckets, clear them
 	// In production, you might want more sophisticated cleanup
 	if len(rl.buckets) > 10000 {

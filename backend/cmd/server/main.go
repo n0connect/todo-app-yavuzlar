@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"todo-app-backend/internal/auth"
 	"todo-app-backend/internal/config"
 	"todo-app-backend/internal/database"
 	"todo-app-backend/internal/handlers"
@@ -63,7 +68,52 @@ func main() {
 	}
 
 	mainLogger.Info("Server is ready to accept connections")
-	log.Fatal(srv.ListenAndServe())
+
+	// Setup graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	// Start server in a goroutine
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+		}
+	}()
+
+	mainLogger.Info("Server started successfully. Waiting for shutdown signal...")
+
+	// Wait for interrupt signal or server error
+	select {
+	case err := <-serverErr:
+		mainLogger.Error("Server error: %v", err)
+		cleanup()
+		log.Fatal(err)
+	case sig := <-sigChan:
+		mainLogger.Info("Received signal: %v. Starting graceful shutdown...", sig)
+		cleanup()
+		gracefulShutdown(srv)
+	}
+}
+
+// cleanup performs cleanup operations before shutdown
+func cleanup() {
+	mainLogger.Debug("Performing cleanup operations...")
+	auth.StopCleanup() // Stop pending store cleanup goroutine
+	mainLogger.Debug("Cleanup completed")
+}
+
+// gracefulShutdown shuts down the server gracefully
+func gracefulShutdown(srv *http.Server) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		mainLogger.Error("Server forced to shutdown: %v", err)
+		log.Fatal(err)
+	}
+
+	mainLogger.Info("Server gracefully stopped")
 }
 
 // Fix middleware handlers
