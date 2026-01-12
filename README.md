@@ -1,4 +1,4 @@
-# Todo App - Encrypted Todo Application
+# Not Simple Todo App - Encrypted Todo Application
 
 ![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=flat&logo=javascript)
@@ -7,17 +7,7 @@
 ![Nginx](https://img.shields.io/badge/Nginx-Alpine-009639?style=flat&logo=nginx)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat)
 
-MullvadVPN'den esinlenilmiş, AccountNumber-only kimlik doğrulama ve per-user encryption ile güvenli todo uygulaması.
-
-## İçindekiler
-
-- [Genel Bakış](#genel-bakış)
-- [Sistem Mimarisi](#sistem-mimarisi)
-- [Pipeline ve İş Akışı](#pipeline-ve-iş-akışı)
-- [Güvenlik Modeli](#güvenlik-modeli)
-- [Kurulum](#kurulum)
-- [API Referansı](#api-referansı)
-- [Referanslar](#referanslar)
+Bearer CSPRNG token tabanlı AccountNumber-only kimlik doğrulama ve per-user encryption ile güvenli todo uygulaması.
 
 ---
 
