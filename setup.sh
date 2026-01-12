@@ -6,6 +6,69 @@ echo "=============="
 
 ENV_FILE=".env"
 
+# Dependency check function
+check_dependency() {
+  local cmd="$1"
+  local name="$2"
+  local required="${3:-true}"
+  local install_hint="${4:-}"
+  
+  if command -v "$cmd" >/dev/null 2>&1; then
+    local version=""
+    case "$cmd" in
+      openssl)
+        version=$(openssl version 2>/dev/null | head -n1 | awk '{print $2}' || echo "unknown")
+        ;;
+      docker)
+        version=$(docker --version 2>/dev/null | awk '{print $3}' | sed 's/,//' || echo "unknown")
+        ;;
+      *)
+        version="installed"
+        ;;
+    esac
+    echo "✅ $name found (version: $version)"
+    return 0
+  else
+    if [ "$required" = "true" ]; then
+      echo "❌ ERROR: $name is required but not found in PATH." >&2
+      if [ -n "$install_hint" ]; then
+        echo "" >&2
+        echo "💡 Installation hint:" >&2
+        echo "   $install_hint" >&2
+      fi
+      exit 1
+    else
+      echo "⚠️  WARNING: $name not found (optional)" >&2
+      return 1
+    fi
+  fi
+}
+
+# Check required dependencies
+echo ""
+echo "🔍 Checking dependencies..."
+echo "============================"
+
+check_dependency openssl "OpenSSL" true \
+  "macOS: Usually pre-installed\n   Linux: sudo apt-get install openssl (Debian/Ubuntu) or sudo yum install openssl (RHEL/CentOS)\n   Or visit: https://www.openssl.org/source/"
+
+# Check optional dependencies (informational)
+check_dependency docker "Docker" false \
+  "Visit: https://docs.docker.com/get-docker/"
+check_dependency docker-compose "Docker Compose" false \
+  "Visit: https://docs.docker.com/compose/install/"
+
+# Check if docker compose (v2) is available
+if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+  echo "✅ Docker Compose (v2) found"
+elif command -v docker-compose >/dev/null 2>&1; then
+  echo "✅ Docker Compose (v1) found"
+fi
+
+echo ""
+echo "============================"
+echo ""
+
 # Create .env if missing
 if [[ ! -f "$ENV_FILE" ]]; then
   touch "$ENV_FILE"

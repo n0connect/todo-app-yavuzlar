@@ -10,7 +10,7 @@
 Secure todo application with Bearer CSPRNG token-based AccountNumber-only authentication and per-user encryption.
 
 <div align="center">
-  <img src="c6acc3600c274500faddcc7f376d90a3faeb1f80cbe0dd119f29da9154462f54.png" alt="How we turned a simple todo app into this" style="max-width: 400px; width: 100%; height: auto;" />
+  <img src="frontend/images/c6acc3600c274500faddcc7f376d90a3faeb1f80cbe0dd119f29da9154462f54.png" alt="How we turned a simple todo app into this" style="max-width: 400px; width: 100%; height: auto;" />
   
   <p><em>How we turned a simple todo app into this</em></p>
 </div>
@@ -103,352 +103,6 @@ This application is a todo management system that authenticates using only crypt
 
 ---
 
-## Pipeline and Workflow
-
-### 1. Register Pipeline (2-Phase)
-
-#### Phase 1: AccountNumber Generation
-
-```
-Frontend → POST /api/v1/register (body: {} or {"confirm": false})
-    │
-    ▼
-Backend:
-  1. GenerateAccountNumber()
-     - crypto/rand: 24 bytes (192-bit entropy)
-     - base64.RawURLEncoding → 32 chars Base64URL
-     - Example: "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq"
-  
-  2. ComputeAccountLookup(AccountNumber)
-     - HMAC-SHA256(ACCOUNT_LOOKUP_PEPPER, AccountNumber)
-     - Hex encoded → 64 chars
-     - Collision check: ExistsByAccountLookup(lookup)
-  
-  3. GeneratePendingID()
-     - crypto/rand: 16 bytes (128-bit)
-     - Hex encoded → 32 chars
-  
-  4. StorePendingRegistration(pendingID, AccountNumber)
-     - In-memory store (sync.RWMutex)
-     - TTL: 5 minutes
-     - One-time use (deleted after retrieval)
-  
-  5. SignPendingRegistrationToken(pendingID)
-     - JWT token with pending_id (NOT AccountNumber)
-     - Expiration: 5 minutes
-     - Claims: { pending_id, is_pending: true }
-    │
-    ▼
-Response:
-  {
-    "success": true,
-    "message": "Account number generated - click continue to create account",
-    "account_number": "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq",
-    "pending_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "confirmed": false
-  }
-    │
-    ▼
-Frontend:
-  - Display AccountNumber to user (progressive reveal)
-  - Store pending_token in memory
-  - User clicks "Continue" → Phase 2
-```
-
-#### Phase 2: Account Creation
-
-```
-Frontend → POST /api/v1/register
-  Body: {
-    "confirm": true,
-    "pending_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }
-    │
-    ▼
-Backend:
-  1. VerifyPendingRegistrationToken(pendingToken)
-     - Decode JWT → extract pending_id
-     - GetPendingRegistration(pending_id)
-       → Retrieve AccountNumber from server-side store
-       → Delete entry (one-time use)
-     - AccountNumber from token, NOT from user input
-  
-  2. ComputeAccountLookup(AccountNumber)
-     - HMAC-SHA256(pepper, AccountNumber)
-  
-  3. ExistsByAccountLookup(lookup)
-     - Check if account already exists (replay protection)
-  
-  4. HashAccountNumber(AccountNumber)
-     - Argon2id hash
-     - Parameters: memory=64MB, time=3, parallelism=2
-     - Format: "$argon2id$v=19$m=67108864,t=3,p=2$salt$hash"
-  
-  5. GenerateSecureUUID()
-     - Internal user ID (24 chars)
-     - Used for JWT subject
-  
-  6. GenerateUserAESKey()
-     - 32-byte AES-256 key
-     - Encrypted with ENCRYPTION_KEY (master key)
-     - Stored as EncryptedKey
-  
-  7. Create User:
-     {
-       UUID: internalUUID,
-       AccountLookup: lookup,      // HMAC hash
-       AccountHash: accountHash,    // Argon2id hash
-       EncryptedKey: encryptedKey   // AES-256-GCM encrypted
-     }
-  
-  8. SignToken(internalUUID)
-     - JWT token (15 min expiration)
-     - Subject: internal UUID (NOT AccountNumber)
-    │
-    ▼
-Response:
-  {
-    "success": true,
-    "message": "Account created successfully",
-    "account_number": "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "confirmed": true
-  }
-    │
-    ▼
-Frontend:
-  - Store JWT token in sessionStorage
-  - Store AccountNumber in sessionStorage
-  - Redirect to app (loadTodos)
-```
-
-### 2. Login Pipeline
-
-```
-Frontend → POST /api/v1/login
-  Body: {
-    "account_number": "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq"
-  }
-    │
-    ▼
-Backend:
-  1. ValidateAccountNumber(AccountNumber)
-     - Length: 32 chars
-     - Regex: ^[A-Za-z0-9_-]{32}$ (Base64URL)
-  
-  2. ComputeAccountLookup(AccountNumber)
-     - HMAC-SHA256(pepper, AccountNumber)
-  
-  3. FindByAccountLookup(lookup)
-     - Query: SELECT * FROM users WHERE account_lookup = ?
-  
-  4. VerifyAccountNumberHash(user.AccountHash, AccountNumber)
-     - Parse Argon2id hash format
-     - Compute hash with same parameters
-     - Constant-time comparison
-  
-  5. SignToken(user.UUID)
-     - JWT token (15 min expiration)
-     - Subject: internal UUID
-    │
-    ▼
-Response:
-  {
-    "success": true,
-    "message": "Login successful",
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }
-  Note: account_number NOT in response (security)
-    │
-    ▼
-Frontend:
-  - Store JWT token in sessionStorage
-  - Use existing AccountNumber from input
-  - Redirect to app (loadTodos)
-```
-
-### 3. Todo CRUD Pipeline
-
-#### Create Todo
-
-```
-Frontend → POST /api/v1/todos
-  Headers: { Authorization: "Bearer <JWT>" }
-  Body: {
-    "title": "Buy groceries",
-    "tags": ["shopping", "urgent"],
-    "priority": "high",
-    "due_date": "2026-01-15"
-  }
-    │
-    ▼
-Backend:
-  1. JWTMiddleware
-     - Extract JWT from Authorization header
-     - Verify signature, expiration, issuer, audience
-     - Extract user UUID from subject
-     - Verify user exists in database
-     - Set user context
-  
-  2. CreateTodoHandler
-     - Validate request (title, priority, etc.)
-     - Get user from context
-  
-  3. TodoService.CreateTodo()
-     - Get user's encrypted key from DB
-     - Decrypt user key with ENCRYPTION_KEY
-     - Encrypt title with user key + AAD
-     - Encrypt each tag with user key + AAD
-     - Create todo record
-  
-  4. Repository.Create()
-     - Insert into todos table
-    │
-    ▼
-Response:
-  {
-    "id": "uuid",
-    "title": "Buy groceries",  // Decrypted
-    "tags": ["shopping", "urgent"],  // Decrypted
-    "priority": "high",
-    "due_date": "2026-01-15T00:00:00Z",
-    "completed": false,
-    "created_at": "2026-01-12T10:00:00Z"
-  }
-```
-
-#### Get Todos
-
-```
-Frontend → GET /api/v1/todos
-  Headers: { Authorization: "Bearer <JWT>" }
-    │
-    ▼
-Backend:
-  1. JWTMiddleware (same as above)
-  
-  2. GetTodosHandler
-     - Get user from context
-  
-  3. TodoService.GetTodos()
-     - Query: SELECT * FROM todos WHERE user_uuid = ?
-     - Get user's encrypted key
-     - Decrypt user key
-     - For each todo:
-       - Decrypt title with user key + AAD
-       - Decrypt each tag with user key + AAD
-    │
-    ▼
-Response:
-  [
-    {
-      "id": "uuid1",
-      "title": "Buy groceries",
-      "tags": ["shopping", "urgent"],
-      ...
-    },
-    ...
-  ]
-```
-
-#### Update Todo
-
-```
-Frontend → PUT /api/v1/todos/{id}
-  Headers: { Authorization: "Bearer <JWT>" }
-  Body: {
-    "title": "Buy groceries and milk",
-    "completed": true,
-    "priority": "medium",
-    "tags": ["shopping"]
-  }
-    │
-    ▼
-Backend:
-  1. JWTMiddleware
-  
-  2. UpdateTodoHandler
-     - Parse todo ID from URL
-     - Get user from context
-  
-  3. TodoService.UpdateTodo()
-     - FindByIDAndUserUUID(todoID, userUUID) // Ownership check
-     - Get user's encrypted key
-     - Decrypt user key
-     - Encrypt updated fields with user key + AAD
-     - Update todo record
-  
-  4. Repository.Update()
-     - WHERE id = ? AND user_uuid = ? // Ownership enforced
-    │
-    ▼
-Response:
-  {
-    "id": "uuid",
-    "title": "Buy groceries and milk",
-    "completed": true,
-    ...
-  }
-```
-
-#### Delete Todo
-
-```
-Frontend → DELETE /api/v1/todos/{id}
-  Headers: { Authorization: "Bearer <JWT>" }
-    │
-    ▼
-Backend:
-  1. JWTMiddleware
-  
-  2. DeleteTodoHandler
-     - Parse todo ID from URL
-     - Get user from context
-  
-  3. TodoService.DeleteTodo()
-     - DeleteByIDAndUserUUID(todoID, userUUID) // Ownership check
-    │
-    ▼
-Response:
-  204 No Content
-```
-
-### 4. Encryption Pipeline
-
-```
-Layer 1: Master Key (Environment Variable)
-  ENCRYPTION_KEY (32 bytes, hex encoded)
-  ├── Used to encrypt/decrypt user-specific AES keys
-  └── Never stored in database
-    │
-    ▼
-Layer 2: User-Specific AES Key
-  GenerateUserAESKey() → 32 bytes
-  ├── Encrypted with ENCRYPTION_KEY (AES-256-GCM)
-  └── Stored in users.encrypted_key
-    │
-    ▼
-Layer 3: AAD (Additional Authenticated Data)
-  BuildAAD(userUUID, todoID, fieldType)
-  ├── Format: "PXAD" + version + userTag + todoID + field + purpose
-  ├── 39 bytes total
-  └── Prevents cross-user data swapping
-    │
-    ▼
-Layer 4: Data Encryption
-  EncryptWithAAD(userKey, plaintext, aad)
-  ├── AES-256-GCM encryption
-  ├── Nonce: 12 bytes (random per encryption)
-  └── Output: nonce + ciphertext + tag (16 bytes)
-    │
-    ▼
-Database Storage:
-  todos.title: <nonce><ciphertext><tag> (binary, base64 encoded)
-  todos.tags: JSON array of encrypted strings
-```
-
----
-
 ## Security Model
 
 ### AccountNumber Generation
@@ -518,6 +172,15 @@ Log output: "****************************ATTDq"
   └── Rest masked with asterisks
 ```
 
+### Encryption Architecture
+
+Data encryption uses a multi-layer approach:
+
+1. **Master Key** (`ENCRYPTION_KEY`): 32-byte hex encoded AES key stored in environment variables, used to encrypt/decrypt user-specific keys
+2. **User-Specific AES Key**: 32-byte AES-256 key per user, encrypted with master key and stored in `users.encrypted_key`
+3. **AAD (Additional Authenticated Data)**: 39-byte structure that prevents cross-user data swap attacks
+4. **Data Encryption**: AES-256-GCM encryption with 12-byte nonce per encryption
+
 ### AAD Structure (39 bytes)
 
 AAD (Additional Authenticated Data) is used to prevent cross-user data swap attacks:
@@ -542,21 +205,7 @@ PURPOSE: 0x01=Encryption
 | Due Date | No | Metadata (date) |
 | Priority | No | Metadata (enum) |
 | Completed | No | Metadata (boolean) |
-| AccountNumber | No | Plaintext not stored in DB; HMAC hash (account_lookup) and Argon2id hash (account_hash) stored |
-
-### Content Security Policy
-
-```
-default-src 'self';
-script-src 'self';                    # No inline scripts
-style-src 'self' 'unsafe-inline';     # Inline styles for dynamic UI
-font-src 'self';
-connect-src 'self';
-frame-ancestors 'none';               # No framing (clickjacking)
-object-src 'none';                    # No plugins
-```
-
----
+| AccountNumber | Not | Plaintext not stored in DB; HMAC hash (account_lookup) and Argon2id hash (account_hash) stored |
 
 ## Installation
 
@@ -569,18 +218,8 @@ object-src 'none';                    # No plugins
 ### Quick Start
 
 ```bash
-# Clone repository
-git clone <repo-url>
-cd todo-app-yavuzlar
-
-# Setup (automatically creates .env)
-./setup.sh
-
-# Build and test (all tests run, services won't start if tests fail)
-./build.sh
-
-# Access
-open http://localhost
+# Setup and build (automatically creates .env, then builds and tests)
+./setup.sh && ./build.sh --clean
 ```
 
 ### Environment Variables
@@ -604,6 +243,53 @@ open http://localhost
 | `DB_SSL_MODE` | SSL mode | `disable` (dev) or `require` (prod) |
 | `BACKEND_PORT` | Backend server port | `8080` |
 
+### Setup Scripts
+
+#### `setup.sh`
+
+Initializes the project by creating and configuring the `.env` file with required environment variables.
+
+**What it does:**
+- Creates `.env` file if it doesn't exist
+- Generates cryptographic keys (if not already present):
+  - `ENCRYPTION_KEY`: 32-byte hex encoded AES master key
+  - `JWT_SECRET`: 32-byte hex encoded JWT signing key
+  - `ACCOUNT_LOOKUP_PEPPER`: 32-byte hex encoded pepper for HMAC lookup
+- Sets default values for configuration variables
+- Preserves existing values (won't overwrite if already set)
+
+**Requirements:**
+- OpenSSL (for generating random keys)
+
+**Note:** Run this script once before building the project. It's safe to run multiple times - it won't overwrite existing values.
+
+#### `build.sh`
+
+Builds Docker images, runs all tests, and starts services only if all tests pass.
+
+**What it does:**
+1. Stops current Docker Compose services
+2. Rebuilds Docker images (uses cache when possible)
+3. Runs all tests in order:
+   - Migration tests (must pass first)
+   - Authentication tests
+   - Encryption tests
+   - Middleware tests
+   - Todo service tests
+   - Integration tests
+   - Handler tests
+   - Utils tests
+4. Starts services only if all tests pass
+
+**Test Execution:**
+- If running in Docker environment: Tests run inside Docker container
+- If running locally: Tests run on host (requires database to be running)
+  - If database is not running, script automatically starts it and waits for readiness
+
+**Exit Behavior:**
+- If any test fails: Services will NOT start, script exits with error code
+- If all tests pass: Services start in background (detached mode)
+
 ### Docker Compose Services
 
 - `postgres`: PostgreSQL 15 (Alpine)
@@ -614,196 +300,29 @@ open http://localhost
 
 ## API Reference
 
-### Authentication
+### JWT Authentication
+Protected endpoints require `Authorization: Bearer <token>` header. Token expires in 15 minutes.
 
-#### Register (Phase 1: Generate AccountNumber)
+### Endpoints
 
-**Request:**
-```
-POST /api/v1/register
-Content-Type: application/json
+- `POST /api/v1/register` - Generate AccountNumber (Phase 1) or create account (Phase 2)
+- `POST /api/v1/login` - Login with AccountNumber
+- `GET /api/v1/todos` - Get all todos (JWT required)
+- `POST /api/v1/todos` - Create todo (JWT required)
+- `PUT /api/v1/todos/{id}` - Update todo (JWT required)
+- `DELETE /api/v1/todos/{id}` - Delete todo (JWT required)
 
-{}
-```
+### Error Codes
 
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Account number generated - click continue to create account",
-  "account_number": "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq",
-  "pending_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "confirmed": false
-}
-```
-
-#### Register (Phase 2: Create Account)
-
-**Request:**
-```
-POST /api/v1/register
-Content-Type: application/json
-
-{
-  "confirm": true,
-  "pending_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Account created successfully",
-  "account_number": "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "confirmed": true
-}
-```
-
-#### Login
-
-**Request:**
-```
-POST /api/v1/login
-Content-Type: application/json
-
-{
-  "account_number": "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Login successful",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
-
-**Note:** `account_number` is not in the response (security).
-
-### Todos (JWT Required)
-
-All todo endpoints require a JWT token. The token must be sent in the `Authorization` header as `Bearer <token>`.
-
-#### Get Todos
-
-**Request:**
-```
-GET /api/v1/todos
-Authorization: Bearer <JWT>
-```
-
-**Response:**
-```json
-[
-  {
-    "id": "uuid",
-    "title": "Buy groceries",
-    "completed": false,
-    "priority": "high",
-    "due_date": "2026-01-15T00:00:00Z",
-    "tags": ["shopping", "urgent"],
-    "created_at": "2026-01-12T10:00:00Z"
-  }
-]
-```
-
-#### Create Todo
-
-**Request:**
-```
-POST /api/v1/todos
-Authorization: Bearer <JWT>
-Content-Type: application/json
-
-{
-  "title": "Buy groceries",
-  "completed": false,
-  "priority": "high",
-  "due_date": "2026-01-15",
-  "tags": ["shopping", "urgent"]
-}
-```
-
-**Response:**
-```json
-{
-  "id": "uuid",
-  "title": "Buy groceries",
-  "completed": false,
-  "priority": "high",
-  "due_date": "2026-01-15T00:00:00Z",
-  "tags": ["shopping", "urgent"],
-  "created_at": "2026-01-12T10:00:00Z"
-}
-```
-
-#### Update Todo
-
-**Request:**
-```
-PUT /api/v1/todos/{id}
-Authorization: Bearer <JWT>
-Content-Type: application/json
-
-{
-  "title": "Buy groceries and milk",
-  "completed": true,
-  "priority": "medium",
-  "due_date": "2026-01-15",
-  "tags": ["shopping"]
-}
-```
-
-**Response:**
-```json
-{
-  "id": "uuid",
-  "title": "Buy groceries and milk",
-  "completed": true,
-  "priority": "medium",
-  "due_date": "2026-01-15T00:00:00Z",
-  "tags": ["shopping"],
-  "created_at": "2026-01-12T10:00:00Z"
-}
-```
-
-#### Delete Todo
-
-**Request:**
-```
-DELETE /api/v1/todos/{id}
-Authorization: Bearer <JWT>
-```
-
-**Response:**
-```
-204 No Content
-```
-
-### Error Responses
-
-**Format:**
-```json
-{
-  "success": false,
-  "message": "Error message"
-}
-```
-
-**Status Codes:**
-- `200 OK`: Success
-- `201 Created`: Resource created
-- `204 No Content`: Success (no body)
-- `400 Bad Request`: Invalid request
-- `401 Unauthorized`: Invalid credentials or expired token
-- `403 Forbidden`: Access denied
-- `404 Not Found`: Resource not found
-- `429 Too Many Requests`: Rate limit exceeded
-- `500 Internal Server Error`: Server error
+- `200` - Success
+- `201` - Created
+- `204` - No Content
+- `400` - Bad Request
+- `401` - Unauthorized
+- `403` - Forbidden
+- `404` - Not Found
+- `429` - Too Many Requests
+- `500` - Internal Server Error
 
 ---
 
@@ -816,6 +335,8 @@ Authorization: Bearer <JWT>
 - **HMAC-SHA256**: RFC 2104 - HMAC: Keyed-Hashing for Message Authentication
 - **JWT**: RFC 7519 - JSON Web Token (JWT)
 - **Base64URL**: RFC 4648 Section 5 - Base 64 Encoding with URL and Filename Safe Alphabet
+- **UUID**: RFC 4122 - A Universally Unique IDentifier (UUID) URN Namespace
+- **Token Bucket Algorithm**: Rate limiting algorithm for traffic shaping
 
 ### Zero-Trust
 
@@ -828,6 +349,8 @@ Authorization: Bearer <JWT>
 - **Nginx**: https://nginx.org/
 - **Docker**: https://www.docker.com/
 - **GORM**: https://gorm.io/
+- **Web Storage API**: https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API (SessionStorage)
+- **CORS**: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
 
 ### Inspiration
 
@@ -842,6 +365,8 @@ Authorization: Bearer <JWT>
 - **Go crypto/hmac**: https://pkg.go.dev/crypto/hmac
 - **golang.org/x/crypto/argon2**: https://pkg.go.dev/golang.org/x/crypto/argon2
 - **github.com/golang-jwt/jwt/v5**: https://pkg.go.dev/github.com/golang-jwt/jwt/v5
+- **github.com/google/uuid**: https://pkg.go.dev/github.com/google/uuid
+- **gorm.io/driver/postgres**: https://pkg.go.dev/gorm.io/driver/postgres
 
 ---
 

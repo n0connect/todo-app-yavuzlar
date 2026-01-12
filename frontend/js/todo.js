@@ -307,6 +307,9 @@ async function updateTodo(id, updates) {
                 // Close context menu
                 const menu = document.querySelector('.todo-context-menu');
                 if (menu) menu.remove();
+                
+                // Show success notification
+                showSuccess('Todo successfully updated');
             }
         } else if (response.status === 401) {
             sessionStorage.removeItem('jwtToken');

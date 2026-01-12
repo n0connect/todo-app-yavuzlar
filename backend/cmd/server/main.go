@@ -1,15 +1,10 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
-	"todo-app-backend/internal/auth"
 	"todo-app-backend/internal/config"
 	"todo-app-backend/internal/database"
 	"todo-app-backend/internal/handlers"
@@ -68,52 +63,7 @@ func main() {
 	}
 
 	mainLogger.Info("Server is ready to accept connections")
-
-	// Setup graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	// Start server in a goroutine
-	serverErr := make(chan error, 1)
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			serverErr <- err
-		}
-	}()
-
-	mainLogger.Info("Server started successfully. Waiting for shutdown signal...")
-
-	// Wait for interrupt signal or server error
-	select {
-	case err := <-serverErr:
-		mainLogger.Error("Server error: %v", err)
-		cleanup()
-		log.Fatal(err)
-	case sig := <-sigChan:
-		mainLogger.Info("Received signal: %v. Starting graceful shutdown...", sig)
-		cleanup()
-		gracefulShutdown(srv)
-	}
-}
-
-// cleanup performs cleanup operations before shutdown
-func cleanup() {
-	mainLogger.Debug("Performing cleanup operations...")
-	auth.StopCleanup() // Stop pending store cleanup goroutine
-	mainLogger.Debug("Cleanup completed")
-}
-
-// gracefulShutdown shuts down the server gracefully
-func gracefulShutdown(srv *http.Server) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := srv.Shutdown(ctx); err != nil {
-		mainLogger.Error("Server forced to shutdown: %v", err)
-		log.Fatal(err)
-	}
-
-	mainLogger.Info("Server gracefully stopped")
+	log.Fatal(srv.ListenAndServe())
 }
 
 // Fix middleware handlers
@@ -140,11 +90,12 @@ func setupRoutes(mux *http.ServeMux) {
 
 	mainLogger.Debug("Registering route: PUT/DELETE /api/v1/todos/")
 	mux.HandleFunc("/api/v1/todos/", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPut {
+		switch r.Method {
+		case http.MethodPut:
 			handlers.UpdateTodoHandler(w, r)
-		} else if r.Method == http.MethodDelete {
+		case http.MethodDelete:
 			handlers.DeleteTodoHandler(w, r)
-		} else {
+		default:
 			mainLogger.Warn("Method not allowed for /api/v1/todos/: %s", r.Method)
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
