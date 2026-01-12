@@ -1,28 +1,29 @@
+// This model NOT IMPORTED in application or database migration.
+
 package models
 
 type LoginRequest struct {
-	UUID string `json:"uuid"`
+	AccountNumber string `json:"account_number"`
 }
 
 type RegisterRequest struct {
-	Confirm      bool   `json:"confirm"`       // false = generate UUID only, true = create account
-	PendingToken string `json:"pending_token"` // required when confirm=true (contains the UUID)
+	Confirm      bool   `json:"confirm"`       // false = generate AccountNumber only, true = create account
+	PendingToken string `json:"pending_token"` // required when confirm=true (contains the AccountNumber)
 }
 
 type LoginResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
-	UUID    string `json:"uuid,omitempty"`  // Backward compatibility - will be removed later
 	Token   string `json:"token,omitempty"` // JWT token
 }
 
 type RegisterResponse struct {
-	Success      bool   `json:"success"`
-	Message      string `json:"message"`
-	UUID         string `json:"uuid"`
-	Token        string `json:"token,omitempty"`         // Only sent when confirm=true
-	PendingToken string `json:"pending_token,omitempty"` // Only sent when confirm=false
-	Confirmed    bool   `json:"confirmed"`               // true if account was created
+	Success       bool   `json:"success"`
+	Message       string `json:"message"`
+	AccountNumber string `json:"account_number"`
+	Token         string `json:"token,omitempty"`         // Only sent when confirm=true
+	PendingToken  string `json:"pending_token,omitempty"` // Only sent when confirm=false
+	Confirmed     bool   `json:"confirmed"`               // true if account was created
 }
 
 type TodoRequest struct {

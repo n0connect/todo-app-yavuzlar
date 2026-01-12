@@ -24,7 +24,7 @@ async function loadTodos() {
                 console.error('Invalid todos data');
             }
         } else if (response.status === 401) {
-            localStorage.removeItem('jwtToken');
+            sessionStorage.removeItem('jwtToken');
             logout();
             showError('Session expired. Please login again.');
         } else {
@@ -89,7 +89,7 @@ async function addTodo() {
                 showSuccess('Todo successfully added');
             }
         } else if (response.status === 401) {
-            localStorage.removeItem('jwtToken');
+            sessionStorage.removeItem('jwtToken');
             logout();
             showError('Session expired. Please login again.');
         } else {
@@ -129,7 +129,7 @@ async function toggleTodo(id) {
                 }
             }
         } else if (response.status === 401) {
-            localStorage.removeItem('jwtToken');
+            sessionStorage.removeItem('jwtToken');
             logout();
             showError('Session expired. Please login again.');
         } else {
@@ -155,7 +155,7 @@ async function deleteTodo(id) {
             updateTodoCount();
             showSuccess('Todo successfully deleted');
         } else if (response.status === 401) {
-            localStorage.removeItem('jwtToken');
+            sessionStorage.removeItem('jwtToken');
             logout();
             showError('Session expired. Please login again.');
         } else {
@@ -257,7 +257,7 @@ async function updateTodoTitle(id, newTitle) {
                 showSuccess('Todo successfully updated');
             }
         } else if (response.status === 401) {
-            localStorage.removeItem('jwtToken');
+            sessionStorage.removeItem('jwtToken');
             logout();
             showError('Session expired. Please login again.');
         } else {
@@ -309,7 +309,7 @@ async function updateTodo(id, updates) {
                 if (menu) menu.remove();
             }
         } else if (response.status === 401) {
-            localStorage.removeItem('jwtToken');
+            sessionStorage.removeItem('jwtToken');
             logout();
             showError('Session expired. Please login again.');
         } else {

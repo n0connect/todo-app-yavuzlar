@@ -1,6 +1,8 @@
 package config
 
 import (
+	"encoding/base64"
+	"encoding/hex"
 	"os"
 	"strconv"
 	"strings"
@@ -141,6 +143,7 @@ func GetDBName() string {
 // GetDBSSLMode returns database SSL mode
 // Values: disable, require, verify-ca, verify-full
 func GetDBSSLMode() string {
+	// Note: Logging is handled in database.connection.go ValidateStartupConfig
 	if IsProductionMode() {
 		return GetEnv("DB_SSL_MODE", "require")
 	}
@@ -155,4 +158,30 @@ func GetDBSSLMode() string {
 // MUST be 32 bytes (64 hex characters)
 func GetEncryptionKey() string {
 	return GetEnv("ENCRYPTION_KEY", "")
+}
+
+// GetAccountLookupPepper returns the pepper for account lookup HMAC
+// MUST be at least 32 bytes (can be hex or base64 encoded)
+func GetAccountLookupPepper() []byte {
+	pepperStr := GetEnv("ACCOUNT_LOOKUP_PEPPER", "")
+	if pepperStr == "" {
+		return nil
+	}
+
+	// Try hex decoding first
+	if decoded, err := hex.DecodeString(pepperStr); err == nil && len(decoded) >= 32 {
+		return decoded
+	}
+
+	// Try base64 decoding
+	if decoded, err := base64.StdEncoding.DecodeString(pepperStr); err == nil && len(decoded) >= 32 {
+		return decoded
+	}
+
+	// Try raw bytes (if exactly 32+ bytes)
+	if len(pepperStr) >= 32 {
+		return []byte(pepperStr)
+	}
+
+	return nil
 }

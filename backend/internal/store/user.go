@@ -16,8 +16,10 @@ var userRepoLogger = utils.NewLogger("USER_REPOSITORY")
 // UserRepository defines the interface for user data access
 type UserRepository interface {
 	FindByUUID(uuid string) (*models.User, error)
+	FindByAccountLookup(lookup string) (*models.User, error)
 	Create(user *models.User) error
 	ExistsByUUID(uuid string) (bool, error)
+	ExistsByAccountLookup(lookup string) (bool, error)
 	GetEncryptedKey(uuid string) (string, error)
 }
 
@@ -73,6 +75,39 @@ func (r *userRepository) ExistsByUUID(uuid string) (bool, error) {
 	}
 	exists := count > 0
 	userRepoLogger.Debug("UserRepository.ExistsByUUID: UUID=%s exists=%v", uuid, exists)
+	return exists, nil
+}
+
+// FindByAccountLookup finds a user by account lookup (HMAC)
+func (r *userRepository) FindByAccountLookup(lookup string) (*models.User, error) {
+	userRepoLogger.Debug("UserRepository.FindByAccountLookup: starting query for lookup")
+	var user models.User
+	result := database.DB.Where("account_lookup = ?", lookup).First(&user)
+	if result.Error != nil {
+		userRepoLogger.LogError("UserRepository.FindByAccountLookup", result.Error)
+		userRepoLogger.Debug("UserRepository.FindByAccountLookup: user not found")
+		// Wrap GORM's ErrRecordNotFound as ErrNotFound for consistent error handling
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, result.Error
+	}
+	userRepoLogger.Debug("UserRepository.FindByAccountLookup: successfully found user")
+	return &user, nil
+}
+
+// ExistsByAccountLookup checks if a user exists with the given account lookup
+func (r *userRepository) ExistsByAccountLookup(lookup string) (bool, error) {
+	userRepoLogger.Debug("UserRepository.ExistsByAccountLookup: checking existence for lookup")
+	var count int64
+	result := database.DB.Model(&models.User{}).Where("account_lookup = ?", lookup).Count(&count)
+	if result.Error != nil {
+		userRepoLogger.LogError("UserRepository.ExistsByAccountLookup", result.Error)
+		userRepoLogger.Debug("UserRepository.ExistsByAccountLookup: query failed")
+		return false, result.Error
+	}
+	exists := count > 0
+	userRepoLogger.Debug("UserRepository.ExistsByAccountLookup: exists=%v", exists)
 	return exists, nil
 }
 

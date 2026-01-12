@@ -4,9 +4,9 @@
 
 // Initialize event listeners when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    // Check if user is already logged in
-    const savedToken = localStorage.getItem('jwtToken');
-    const savedUUID = localStorage.getItem('userUUID');
+    // Check if user is already logged in (using sessionStorage, not localStorage)
+    const savedToken = sessionStorage.getItem('jwtToken');
+    const savedUUID = sessionStorage.getItem('userUUID');
     
     if (savedToken) {
         userUUID = savedUUID;

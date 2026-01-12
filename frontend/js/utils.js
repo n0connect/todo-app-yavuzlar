@@ -13,8 +13,8 @@ function getAuthHeaders() {
         'Content-Type': 'application/json'
     };
     
-    // JWT token required for authentication
-    const token = localStorage.getItem('jwtToken');
+    // JWT token required for authentication (stored in sessionStorage, not localStorage)
+    const token = sessionStorage.getItem('jwtToken');
     console.log('getAuthHeaders: token exists:', !!token, 'length:', token ? token.length : 0);
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;

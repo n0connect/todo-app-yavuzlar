@@ -32,11 +32,11 @@ type Claims struct {
 }
 
 // PendingRegistrationClaims represents JWT claims for pending registration
-// Contains the UUID that was generated but account not yet created
+// Contains the pending ID that references server-side stored AccountNumber
 type PendingRegistrationClaims struct {
 	jwt.RegisteredClaims
-	PendingUUID string `json:"pending_uuid"`
-	IsPending   bool   `json:"is_pending"`
+	PendingID string `json:"pending_id"`
+	IsPending bool   `json:"is_pending"`
 }
 
 // validateSecret ensures JWT secret meets security requirements
@@ -90,10 +90,10 @@ func SignToken(userUUID string) (string, error) {
 }
 
 // SignPendingRegistrationToken creates a short-lived JWT for pending registration
-// This token contains the UUID that was generated but account not yet confirmed
+// This token contains the pending ID that references server-side stored AccountNumber
 // Security: Short expiration (5 minutes), contains is_pending flag
-func SignPendingRegistrationToken(pendingUUID string) (string, error) {
-	jwtLogger.Debug("SignPendingRegistrationToken: starting for pendingUUID: %s", pendingUUID)
+func SignPendingRegistrationToken(pendingID string) (string, error) {
+	jwtLogger.Debug("SignPendingRegistrationToken: starting for pendingID: %s", pendingID)
 
 	secret := config.GetJWTSecret()
 	if err := validateSecret(secret); err != nil {
@@ -114,8 +114,8 @@ func SignPendingRegistrationToken(pendingUUID string) (string, error) {
 			ExpiresAt: jwt.NewNumericDate(now.Add(expiration)),
 			NotBefore: jwt.NewNumericDate(now),
 		},
-		PendingUUID: pendingUUID,
-		IsPending:   true,
+		PendingID: pendingID,
+		IsPending: true,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -125,11 +125,11 @@ func SignPendingRegistrationToken(pendingUUID string) (string, error) {
 		return "", err
 	}
 
-	jwtLogger.Debug("SignPendingRegistrationToken: successfully generated for pendingUUID: %s", pendingUUID)
+	jwtLogger.Debug("SignPendingRegistrationToken: successfully generated for pendingID: %s", pendingID)
 	return tokenString, nil
 }
 
-// VerifyPendingRegistrationToken verifies a pending registration token and returns the pending UUID
+// VerifyPendingRegistrationToken verifies a pending registration token and returns the pending AccountNumber
 // Returns error if token is not a pending registration token or is invalid/expired
 func VerifyPendingRegistrationToken(tokenString string) (string, error) {
 	jwtLogger.Debug("VerifyPendingRegistrationToken: starting verification")
@@ -173,13 +173,21 @@ func VerifyPendingRegistrationToken(tokenString string) (string, error) {
 		return "", ErrInvalidToken
 	}
 
-	if claims.PendingUUID == "" {
-		jwtLogger.Warn("VerifyPendingRegistrationToken: pending UUID is empty")
+	if claims.PendingID == "" {
+		jwtLogger.Warn("VerifyPendingRegistrationToken: pending ID is empty")
 		return "", ErrInvalidToken
 	}
 
-	jwtLogger.Debug("VerifyPendingRegistrationToken: verified pendingUUID: %s", claims.PendingUUID)
-	return claims.PendingUUID, nil
+	// Retrieve AccountNumber from server-side store
+	// Note: GetPendingRegistration already deletes the entry (one-time use)
+	accountNumber, err := GetPendingRegistration(claims.PendingID)
+	if err != nil {
+		jwtLogger.Warn("VerifyPendingRegistrationToken: failed to retrieve AccountNumber for pendingID (masked)")
+		return "", err
+	}
+
+	jwtLogger.Debug("VerifyPendingRegistrationToken: verified pendingID and retrieved AccountNumber (masked)")
+	return accountNumber, nil
 }
 
 // VerifyToken verifies a JWT token and returns the user UUID

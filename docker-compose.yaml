@@ -22,6 +22,7 @@ services:
       dockerfile: dev.backend.Dockerfile
     container_name: todo-backend
     environment:
+      ALLOWED_ORIGINS: http://localhost,http://127.0.0.1
       DB_HOST: postgres
       DB_USER: postgres
       DB_PASSWORD: postgres
@@ -31,6 +32,7 @@ services:
       BACKEND_PORT: 8080
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       JWT_SECRET: ${JWT_SECRET}
+      ACCOUNT_LOOKUP_PEPPER: ${ACCOUNT_LOOKUP_PEPPER}
       JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-15}
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-*}
       APP_ENV: ${APP_ENV:-development}

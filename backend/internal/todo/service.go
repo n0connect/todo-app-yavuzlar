@@ -1,7 +1,9 @@
 package todo
 
 import (
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -173,6 +175,7 @@ func (s *TodoService) CreateTodo(userUUIDStr string, req models.TodoRequest) (*T
 	}
 
 	// Validate tags (max 10 tags, each max 30 chars) and encrypt
+	// SECURITY: Validates UTF-8, null bytes, and truncates by runes (not bytes)
 	var encryptedTags pq.StringArray
 	var plainTags []string
 	tagAAD := encryption.BuildAAD(userUUIDStr, todoID, encryption.FieldTags, encryption.PurposeStoredRecord)
@@ -180,9 +183,31 @@ func (s *TodoService) CreateTodo(userUUIDStr string, req models.TodoRequest) (*T
 		if i >= 10 {
 			break
 		}
-		if len(tag) > 30 {
-			tag = tag[:30]
+
+		// Validate UTF-8 encoding
+		if !utf8.ValidString(tag) {
+			s.logger.Warn("CreateTodo: invalid UTF-8 tag, skipping")
+			continue
 		}
+
+		// Check for null bytes (security)
+		if strings.Contains(tag, "\x00") {
+			s.logger.Warn("CreateTodo: null byte in tag, skipping")
+			continue
+		}
+
+		// Trim whitespace
+		tag = strings.TrimSpace(tag)
+		if tag == "" {
+			continue // Skip empty tags
+		}
+
+		// Truncate by runes, not bytes (prevents Unicode corruption)
+		runes := []rune(tag)
+		if len(runes) > 30 {
+			tag = string(runes[:30])
+		}
+
 		plainTags = append(plainTags, tag)
 		encryptedTag, err := encryption.EncryptWithAAD(tag, userKey, tagAAD)
 		if err != nil {
@@ -289,6 +314,7 @@ func (s *TodoService) UpdateTodo(userUUIDStr string, todoIDStr string, req model
 	var responseTags []string
 
 	// Update tags if provided - encrypt each tag
+	// SECURITY: Validates UTF-8, null bytes, and truncates by runes (not bytes)
 	if req.Tags != nil {
 		var encryptedTags pq.StringArray
 		tagAAD := encryption.BuildAAD(userUUIDStr, todoID, encryption.FieldTags, encryption.PurposeStoredRecord)
@@ -296,9 +322,31 @@ func (s *TodoService) UpdateTodo(userUUIDStr string, todoIDStr string, req model
 			if i >= 10 {
 				break
 			}
-			if len(tag) > 30 {
-				tag = tag[:30]
+
+			// Validate UTF-8 encoding
+			if !utf8.ValidString(tag) {
+				s.logger.Warn("UpdateTodo: invalid UTF-8 tag, skipping")
+				continue
 			}
+
+			// Check for null bytes (security)
+			if strings.Contains(tag, "\x00") {
+				s.logger.Warn("UpdateTodo: null byte in tag, skipping")
+				continue
+			}
+
+			// Trim whitespace
+			tag = strings.TrimSpace(tag)
+			if tag == "" {
+				continue // Skip empty tags
+			}
+
+			// Truncate by runes, not bytes (prevents Unicode corruption)
+			runes := []rune(tag)
+			if len(runes) > 30 {
+				tag = string(runes[:30])
+			}
+
 			responseTags = append(responseTags, tag)
 			encryptedTag, err := encryption.EncryptWithAAD(tag, userKey, tagAAD)
 			if err != nil {

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"regexp"
 	"strings"
@@ -24,8 +25,12 @@ const (
 // This allows emojis, special chars, any Unicode text
 
 var (
-	// UUID: Only alphanumeric, exactly 24 characters
+	// UUID: Only alphanumeric, exactly 24 characters (kept for backward compatibility)
 	uuidPattern = regexp.MustCompile(`^[a-zA-Z0-9]{24}$`)
+
+	// AccountNumber: Base64URL (no padding) - 32 characters for 24 bytes (192-bit)
+	// Base64URL uses A-Z, a-z, 0-9, _, - (RFC 4648 Section 5)
+	accountNumberPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{32}$`)
 
 	// Base64: Only valid base64 characters
 	base64Pattern = regexp.MustCompile(`^[A-Za-z0-9+/]*={0,2}$`)
@@ -65,6 +70,42 @@ func GenerateSecureUUID() (string, error) {
 
 	validationLogger.Debug("GenerateSecureUUID: generated 24-char alphanumeric UUID with CSPRNG")
 	return string(result), nil
+}
+
+// GenerateAccountNumber generates a 192-bit (24 bytes) CSPRNG account number
+// Returns base64url-encoded string (32 characters, no padding)
+// Encoding: 24 bytes (192 bits) -> base64.RawURLEncoding -> 32 characters (192 bits)
+func GenerateAccountNumber() (string, error) {
+	// Generate exactly 24 bytes (192 bits) of CSPRNG
+	randomBytes := make([]byte, 24)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+
+	// Base64URL encoding (RFC 4648 Section 5, no padding)
+	// 24 bytes = 192 bits -> base64url = 32 characters (192 bits preserved)
+	encoded := base64.RawURLEncoding.EncodeToString(randomBytes)
+
+	validationLogger.Debug("GenerateAccountNumber: generated 32-char base64url account number (192-bit CSPRNG)")
+	return encoded, nil
+}
+
+// ValidateAccountNumber validates account number format
+// Must be exactly 32 base64url characters (A-Z, a-z, 0-9, _, -)
+func ValidateAccountNumber(accountNumber string) bool {
+	if len(accountNumber) != 32 {
+		return false
+	}
+	return accountNumberPattern.MatchString(accountNumber)
+}
+
+// MaskAccountNumber masks account number for logging (shows only last 4 characters)
+// Example: "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567" -> "****************************567"
+func MaskAccountNumber(accountNumber string) string {
+	if len(accountNumber) <= 4 {
+		return "****"
+	}
+	return strings.Repeat("*", len(accountNumber)-4) + accountNumber[len(accountNumber)-4:]
 }
 
 // ValidateTitle validates todo title with minimal restrictions

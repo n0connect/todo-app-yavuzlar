@@ -40,14 +40,6 @@ upsert_env() {
 }
 
 require_cmd openssl
-require_cmd docker
-
-# docker compose vs docker-compose compatibility
-if command -v docker-compose >/dev/null 2>&1; then
-  COMPOSE="docker-compose"
-else
-  COMPOSE="docker compose"
-fi
 
 # Generate/load ENCRYPTION_KEY
 if [[ -z "${ENCRYPTION_KEY:-}" ]]; then
@@ -62,6 +54,13 @@ if [[ -z "${JWT_SECRET:-}" ]]; then
   JWT_SECRET="$(openssl rand -hex 32)"
 fi
 upsert_env "JWT_SECRET" "$JWT_SECRET"
+
+# Generate/load ACCOUNT_LOOKUP_PEPPER
+if [[ -z "${ACCOUNT_LOOKUP_PEPPER:-}" ]]; then
+  echo "Generating ACCOUNT_LOOKUP_PEPPER..."
+  ACCOUNT_LOOKUP_PEPPER="$(openssl rand -hex 32)"
+fi
+upsert_env "ACCOUNT_LOOKUP_PEPPER" "$ACCOUNT_LOOKUP_PEPPER"
 
 # Defaults
 JWT_EXPIRATION_MINUTES="${JWT_EXPIRATION_MINUTES:-15}"
@@ -80,9 +79,12 @@ echo "  JWT_EXPIRATION_MINUTES: $JWT_EXPIRATION_MINUTES"
 echo "  ALLOWED_ORIGIN: $ALLOWED_ORIGIN"
 echo "  APP_ENV: $APP_ENV"
 echo "  LOG_LEVEL: $LOG_LEVEL"
+echo "  ACCOUNT_LOOKUP_PEPPER: [generated]"
 echo ""
 echo "⚠️  IMPORTANT: Keep your .env file secure and do not commit it to version control!"
 echo ""
-
-echo "Starting containers..."
-$COMPOSE up --build
+echo "✅ .env file created successfully!"
+echo ""
+echo "📝 Next steps:"
+echo "   1. Run './build.sh' to build and start services (with tests)"
+echo "   2. Or run 'docker compose up -d' to start without tests"

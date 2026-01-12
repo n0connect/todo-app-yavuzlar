@@ -36,10 +36,10 @@
             </div>
             
             <div class="login-form" id="loginForm">
-                <p class="login-info">enter your 24-character uuid</p>
+                <p class="login-info">enter your 24-character account number</p>
                 <div class="login-input-group">
                     <div class="uuid-input-wrapper">
-                        <input type="password" id="uuidInput" placeholder="xxxxxxxxxxxxxxxxxxxxxxxx" maxlength="24" spellcheck="false" autocomplete="off">
+                        <input type="password" id="uuidInput" placeholder="Enter your account number" maxlength="32" spellcheck="false" autocomplete="off">
                         <span class="eye-icon" id="eyeIcon">👁</span>
                     </div>
                     <button id="loginBtn" class="primary-btn">login</button>
@@ -66,12 +66,12 @@
                 <p id="registerError" class="error"></p>
                 <p id="registerSuccess" class="success"></p>
                 <div id="uuidDisplay" class="uuid-display">
-                    <p class="uuid-label">your uuid</p>
+                    <p class="uuid-label">your account number</p>
                     <div class="uuid-box">
                         <code id="generatedUUID"></code>
                         <button id="copyBtn" class="copy-btn">copy</button>
                     </div>
-                    <p class="uuid-warning">⚠️ save this uuid — it's your only way to access your todos!</p>
+                    <p class="uuid-warning">⚠️ save this account number — it's your only way to access your todos!</p>
                     <button id="continueBtn" class="primary-btn" disabled>continue →</button>
                 </div>
                 <button id="cancelRegistration" class="text-btn cancel-reg-btn">✕ cancel registration</button>

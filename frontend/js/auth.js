@@ -11,18 +11,19 @@ async function login() {
     successElement.textContent = '';
 
     if (!uuidInput) {
-        errorElement.textContent = 'please enter uuid';
+        errorElement.textContent = 'please enter account number';
         return;
     }
 
-    if (uuidInput.length !== 24) {
-        errorElement.textContent = 'uuid must be 24 characters';
+    // AccountNumber is 32 base64url characters (A-Z, a-z, 0-9, _, -)
+    if (uuidInput.length !== 32) {
+        errorElement.textContent = 'account number must be 32 characters';
         return;
     }
 
-    // Basic alphanumeric validation
-    if (!/^[a-zA-Z0-9]{24}$/.test(uuidInput)) {
-        errorElement.textContent = 'uuid must contain only letters and numbers';
+    // Base64URL validation: A-Z, a-z, 0-9, _, -
+    if (!/^[A-Za-z0-9_-]{32}$/.test(uuidInput)) {
+        errorElement.textContent = 'account number must contain only A-Z, a-z, 0-9, _, -';
         return;
     }
 
@@ -32,7 +33,7 @@ async function login() {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ uuid: uuidInput })
+            body: JSON.stringify({ account_number: uuidInput })
         });
 
         const data = await response.json();
@@ -43,12 +44,13 @@ async function login() {
         }
 
         if (response.ok && data.success) {
-            userUUID = uuidInput;
-            localStorage.setItem('userUUID', userUUID);
+            // Store account number (for backward compatibility, still using userUUID variable name)
+            userUUID = uuidInput; // Use input directly since response doesn't include account_number
+            sessionStorage.setItem('userUUID', userUUID);
             
             if (data.token) {
-                localStorage.setItem('jwtToken', data.token);
-                console.log('JWT token stored successfully');
+                sessionStorage.setItem('jwtToken', data.token);
+                console.log('JWT token stored successfully in sessionStorage');
             } else {
                 console.warn('Login successful but no token received');
             }
@@ -96,18 +98,19 @@ function startFakeUUIDGeneration(uuidElement, successElement, uuidDisplay) {
         clearInterval(fakeUUIDInterval);
     }
     
-    // Start continuous fake UUID generation
+    // Start continuous fake AccountNumber generation (base64url: A-Z, a-z, 0-9, _, -)
+    const base64urlChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-';
     fakeUUIDInterval = setInterval(() => {
-        let fakeUUID = '';
-        for (let i = 0; i < 24; i++) {
-            // Mix of characters and occasional * for visual interest
+        let fakeAccountNumber = '';
+        for (let i = 0; i < 32; i++) {
+            // Mix of base64url characters and occasional * for visual interest
             if (Math.random() < 0.08) {
-                fakeUUID += '*';
+                fakeAccountNumber += '*';
             } else {
-                fakeUUID += chars.charAt(Math.floor(Math.random() * chars.length));
+                fakeAccountNumber += base64urlChars.charAt(Math.floor(Math.random() * base64urlChars.length));
             }
         }
-        uuidElement.textContent = fakeUUID;
+        uuidElement.textContent = fakeAccountNumber;
     }, 120); // Fast scramble animation
 }
 
@@ -153,16 +156,16 @@ async function copyUUID() {
         const data = await response.json();
         
         if (!data || !data.success) {
-            errorElement.textContent = data?.message || 'failed to generate uuid';
+            errorElement.textContent = data?.message || 'failed to generate account number';
             uuidElement.textContent = 'error - try again';
             return;
         }
 
-        const realUUID = data.uuid;
+        const realAccountNumber = data.account_number;
         const pendingToken = data.pending_token;
         
-        if (!realUUID || realUUID.length !== 24) {
-            errorElement.textContent = 'invalid uuid received';
+        if (!realAccountNumber || realAccountNumber.length !== 32) {
+            errorElement.textContent = 'invalid account number received';
             return;
         }
         
@@ -171,21 +174,21 @@ async function copyUUID() {
             return;
         }
         
-        // Store pending UUID and token for account creation on continue
-        pendingRegistrationUUID = realUUID;
+        // Store pending AccountNumber and token for account creation on continue
+        pendingRegistrationUUID = realAccountNumber;
         pendingRegistrationToken = pendingToken;
         
-        // Reveal the real UUID with animation
-        await revealRealUUID(uuidElement, realUUID);
+        // Reveal the real AccountNumber with animation
+        await revealRealUUID(uuidElement, realAccountNumber);
         
         uuidElement.classList.remove('masking');
         uuidElement.classList.add('revealed');
-        successElement.textContent = 'your uuid is ready! click continue to create account.';
+        successElement.textContent = 'your account number is ready! click continue to create account.';
         
         // Copy to clipboard
         try {
-            await copyToClipboard(realUUID);
-            showSuccess('UUID copied to clipboard!');
+            await copyToClipboard(realAccountNumber);
+            showSuccess('Account number copied to clipboard!');
         } catch (e) {
             showWarning('Could not copy automatically. Please copy manually.');
         }
@@ -195,12 +198,12 @@ async function copyUUID() {
         
     } catch (error) {
         errorElement.textContent = 'connection error. please try again.';
-        console.error('UUID generation error:', error);
+        console.error('AccountNumber generation error:', error);
         uuidElement.textContent = 'error - try again';
     }
 }
 
-// Animate UUID to all asterisks
+// Animate AccountNumber to all asterisks
 function animateToMask(uuidElement) {
     return new Promise((resolve) => {
         const currentText = uuidElement.textContent;
@@ -210,30 +213,30 @@ function animateToMask(uuidElement) {
         const maskInterval = setInterval(() => {
             // Mask 2-3 random characters per step
             for (let i = 0; i < 3; i++) {
-                const randomIndex = Math.floor(Math.random() * 24);
+                const randomIndex = Math.floor(Math.random() * 32);
                 masked[randomIndex] = '*';
             }
             uuidElement.textContent = masked.join('');
             step++;
             
             // Check if all masked
-            if (masked.every(c => c === '*') || step > 15) {
+            if (masked.every(c => c === '*') || step > 20) {
                 clearInterval(maskInterval);
-                uuidElement.textContent = '************************';
+                uuidElement.textContent = '********************************';
                 resolve();
             }
         }, 50);
     });
 }
 
-// Reveal the real UUID character by character
-function revealRealUUID(uuidElement, realUUID) {
+// Reveal the real AccountNumber character by character
+function revealRealUUID(uuidElement, realAccountNumber) {
     return new Promise((resolve) => {
-        let revealed = '************************'.split('');
+        let revealed = '********************************'.split('');
         let revealOrder = [];
         
         // Create random reveal order
-        for (let i = 0; i < 24; i++) {
+        for (let i = 0; i < 32; i++) {
             revealOrder.push(i);
         }
         // Shuffle
@@ -245,15 +248,15 @@ function revealRealUUID(uuidElement, realUUID) {
         let step = 0;
         const revealInterval = setInterval(() => {
             // Reveal 2-3 characters per step
-            for (let i = 0; i < 3 && step < 24; i++, step++) {
+            for (let i = 0; i < 3 && step < 32; i++, step++) {
                 const idx = revealOrder[step];
-                revealed[idx] = realUUID[idx];
+                revealed[idx] = realAccountNumber[idx];
             }
             uuidElement.textContent = revealed.join('');
             
-            if (step >= 24) {
+            if (step >= 32) {
                 clearInterval(revealInterval);
-                uuidElement.textContent = realUUID;
+                uuidElement.textContent = realAccountNumber;
                 resolve();
             }
         }, 40);
@@ -265,9 +268,9 @@ async function continueWithUUID() {
     const successElement = document.getElementById('registerSuccess');
     const errorElement = document.getElementById('registerError');
     
-    // Validate that we have a real UUID (not masked)
-    if (!generatedUUID || generatedUUID.includes('*') || generatedUUID.length !== 24) {
-        showError('Please click copy first to generate your UUID');
+    // Validate that we have a real AccountNumber (not masked)
+    if (!generatedUUID || generatedUUID.includes('*') || generatedUUID.length !== 32) {
+        showError('Please click copy first to generate your account number');
         return;
     }
     
@@ -313,9 +316,9 @@ async function continueWithUUID() {
             return;
         }
         
-        // Account created successfully - use UUID from response (not frontend)
-        userUUID = data.uuid;
-        localStorage.setItem('userUUID', userUUID);
+        // Account created successfully - use AccountNumber from response (not frontend)
+        userUUID = data.account_number;
+        sessionStorage.setItem('userUUID', userUUID);
         
         // Clear pending state
         pendingRegistrationUUID = null;
@@ -323,7 +326,7 @@ async function continueWithUUID() {
         
         // Store JWT token
         if (data.token) {
-            localStorage.setItem('jwtToken', data.token);
+            sessionStorage.setItem('jwtToken', data.token);
             showSuccess('Welcome! Your account has been created.');
             showApp();
             loadTodos();
@@ -339,15 +342,15 @@ async function continueWithUUID() {
     }
 }
 
-// Helper function to login with UUID after registration
-async function loginWithUUID(uuid) {
+// Helper function to login with AccountNumber after registration
+async function loginWithUUID(accountNumber) {
     try {
         const response = await fetch(`${API_BASE_URL}/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ uuid: uuid })
+            body: JSON.stringify({ account_number: accountNumber })
         });
 
         const data = await response.json();
@@ -371,8 +374,8 @@ async function loginWithUUID(uuid) {
 
 function logout() {
     userUUID = null;
-    localStorage.removeItem('userUUID');
-    localStorage.removeItem('jwtToken');
+    sessionStorage.removeItem('userUUID');
+    sessionStorage.removeItem('jwtToken');
     todos = [];
     showMainMenu();
     document.getElementById('uuidInput').value = '';

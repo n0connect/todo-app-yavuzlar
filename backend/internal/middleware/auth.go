@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -29,7 +30,7 @@ func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		// Check Bearer prefix
 		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") { // Not case-sensitive Bearer
 			authMiddlewareLogger.Warn("JWTMiddleware: invalid Authorization header format for path: %s", r.URL.Path)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
@@ -41,10 +42,10 @@ func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		// Verify token
 		userUUID, err := auth.VerifyToken(tokenString)
 		if err != nil {
-			if err == auth.ErrExpiredToken {
-				authMiddlewareLogger.Warn("JWTMiddleware: expired token for path: %s", r.URL.Path)
-			} else {
+			if !errors.Is(err, auth.ErrExpiredToken) {
 				authMiddlewareLogger.Warn("JWTMiddleware: invalid token for path: %s", r.URL.Path)
+			} else {
+				authMiddlewareLogger.Warn("JWTMiddleware: expired token for path: %s", r.URL.Path)
 			}
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
