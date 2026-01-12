@@ -8,6 +8,12 @@
 *.out
 go.work
 
+# Go binaries (common names)
+server
+main
+backend/server
+backend/main
+
 # Dependencies
 vendor/
 
