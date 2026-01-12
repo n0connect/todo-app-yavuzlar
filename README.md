@@ -10,7 +10,7 @@
 Secure todo application with Bearer CSPRNG token-based AccountNumber-only authentication and per-user encryption.
 
 <div align="center">
-  <img src="frontend/images/c6acc3600c274500faddcc7f376d90a3faeb1f80cbe0dd119f29da9154462f54.png" alt="How we turned a simple todo app into this" style="max-width: 400px; width: 100%; height: auto;" />
+  <img src="frontend/images/c6acc3600c274500faddcc7f376d90a3faeb1f80cbe0dd119f29da9154462f54.png" alt="How we turned a simple todo app into this" style="max-width: 250px; width: 100%; height: auto;" />
   
   <p><em>How we turned a simple todo app into this</em></p>
 </div>
