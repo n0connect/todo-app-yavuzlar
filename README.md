@@ -7,35 +7,39 @@
 ![Nginx](https://img.shields.io/badge/Nginx-Alpine-009639?style=flat&logo=nginx)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat)
 
-Bearer CSPRNG token tabanlı AccountNumber-only kimlik doğrulama ve per-user encryption ile güvenli todo uygulaması.
+Secure todo application with Bearer CSPRNG token-based AccountNumber-only authentication and per-user encryption.
+
+<div align="center">
+  <img src="c6acc3600c274500faddcc7f376d90a3faeb1f80cbe0dd119f29da9154462f54.png" alt="How we turned a simple todo app into this" style="max-width: 400px; width: 100%; height: auto;" />
+</div>
 
 ---
 
-## Genel Bakış
+## Overview
 
-Bu uygulama, şifre kullanmadan sadece kriptografik AccountNumber ile kimlik doğrulama yapan, tüm verileri per-user encryption ile şifreleyen bir todo yönetim sistemidir.
+This application is a todo management system that authenticates using only cryptographic AccountNumber (no passwords) and encrypts all data with per-user encryption.
 
-### Temel Özellikler
+### Key Features
 
-**Güvenlik:**
-- AccountNumber-only authentication (192-bit entropy, Base64URL, 32 karakter)
-- AES-256-GCM encryption (title ve tags şifreli)
-- AAD (Additional Authenticated Data) ile cross-user data swap koruması
-- Per-user encryption keys (her kullanıcıya özel anahtar)
-- Zero plaintext storage (AccountNumber veritabanında plaintext tutulmaz)
-- Rate limiting (IP bazlı, login/register için)
-- Log masking (AccountNumber ve hassas bilgiler maskelenir)
-- Session storage (token'lar localStorage yerine sessionStorage'da)
+**Security:**
+- AccountNumber-only authentication (192-bit entropy, Base64URL, 32 characters)
+- AES-256-GCM encryption (title and tags encrypted)
+- AAD (Additional Authenticated Data) for cross-user data swap protection
+- Per-user encryption keys (unique key per user)
+- Zero plaintext storage (AccountNumber never stored in plaintext in database)
+- Rate limiting (IP-based, for login/register)
+- Log masking (AccountNumber and sensitive information masked)
+- Session storage (tokens in sessionStorage instead of localStorage)
 
-**Fonksiyonel:**
-- Todo CRUD işlemleri
-- Tag sistemi (şifreli)
-- Due date (son tarih)
-- Priority seviyeleri (low/medium/high)
-- Tag ile filtreleme ve sıralama
+**Functional:**
+- Todo CRUD operations
+- Tag system (encrypted)
+- Due date
+- Priority levels (low/medium/high)
+- Filtering and sorting by tags
 
-**Teknik:**
-- Frontend: Vanilla JavaScript (framework bağımlılığı yok)
+**Technical:**
+- Frontend: Vanilla JavaScript (no framework dependencies)
 - Backend: Go (net/http)
 - Database: PostgreSQL
 - Reverse Proxy: Nginx
@@ -43,7 +47,7 @@ Bu uygulama, şifre kullanmadan sadece kriptografik AccountNumber ile kimlik do�
 
 ---
 
-## Sistem Mimarisi
+## System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -97,14 +101,14 @@ Bu uygulama, şifre kullanmadan sadece kriptografik AccountNumber ile kimlik do�
 
 ---
 
-## Pipeline ve İş Akışı
+## Pipeline and Workflow
 
 ### 1. Register Pipeline (2-Phase)
 
 #### Phase 1: AccountNumber Generation
 
 ```
-Frontend → POST /api/v1/register (body: {} veya {"confirm": false})
+Frontend → POST /api/v1/register (body: {} or {"confirm": false})
     │
     ▼
 Backend:
@@ -443,20 +447,20 @@ Database Storage:
 
 ---
 
-## Güvenlik Modeli
+## Security Model
 
-### AccountNumber Üretimi
+### AccountNumber Generation
 
-AccountNumber, 192-bit kriptografik güvenlik ile üretilir:
+AccountNumber is generated with 192-bit cryptographic security:
 
 1. `crypto/rand.Read(24 bytes)` → 192-bit entropy
-2. `base64.RawURLEncoding.EncodeToString()` → 32 karakter Base64URL
-3. Sonuç: 32 karakter (A-Z, a-z, 0-9, -, _)
-4. Örnek: "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq"
+2. `base64.RawURLEncoding.EncodeToString()` → 32 characters Base64URL
+3. Result: 32 characters (A-Z, a-z, 0-9, -, _)
+4. Example: "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq"
 
-### Veritabanında AccountNumber Saklama
+### AccountNumber Storage in Database
 
-AccountNumber ASLA plaintext tutulmaz:
+AccountNumber is NEVER stored in plaintext:
 
 **HMAC Lookup (Fast Lookup):**
 ```
@@ -490,7 +494,7 @@ account_hash: "$argon2id$v=19$m=67108864,t=3,p=2$..." (stored)
 
 ### Rate Limiting
 
-Token Bucket algoritması kullanılır:
+Token Bucket algorithm is used:
 - Capacity: 20 requests
 - Refill rate: 1 request/second
 - Applied to: `/api/v1/login`, `/api/v1/register`
@@ -499,7 +503,7 @@ Token Bucket algoritması kullanılır:
 
 ### Log Masking
 
-AccountNumber ve hassas bilgiler loglarda maskelenir:
+AccountNumber and sensitive information are masked in logs:
 ```
 AccountNumber: "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq"
     │
@@ -512,9 +516,9 @@ Log output: "****************************ATTDq"
   └── Rest masked with asterisks
 ```
 
-### AAD Yapısı (39 byte)
+### AAD Structure (39 bytes)
 
-AAD (Additional Authenticated Data), cross-user data swap saldırılarını önlemek için kullanılır:
+AAD (Additional Authenticated Data) is used to prevent cross-user data swap attacks:
 
 ```
 ┌────────┬─────┬──────────────┬──────────────┬───────┬─────────┐
@@ -527,16 +531,16 @@ FIELD: 0x01=Title, 0x02=Content, 0x03=Tags
 PURPOSE: 0x01=Encryption
 ```
 
-### Şifreli Alanlar
+### Encrypted Fields
 
-| Alan | Şifreli | Açıklama |
-|------|---------|----------|
-| Title | Evet | AES-256-GCM + AAD |
-| Tags | Evet | Her tag ayrı şifreli |
-| Due Date | Hayır | Metadata (tarih) |
-| Priority | Hayır | Metadata (enum) |
-| Completed | Hayır | Metadata (boolean) |
-| AccountNumber | Hayır | Plaintext DB'de tutulmaz; HMAC hash (account_lookup) ve Argon2id hash (account_hash) tutulur |
+| Field | Encrypted | Description |
+|-------|-----------|-------------|
+| Title | Yes | AES-256-GCM + AAD |
+| Tags | Yes | Each tag encrypted separately |
+| Due Date | No | Metadata (date) |
+| Priority | No | Metadata (enum) |
+| Completed | No | Metadata (boolean) |
+| AccountNumber | No | Plaintext not stored in DB; HMAC hash (account_lookup) and Argon2id hash (account_hash) stored |
 
 ### Content Security Policy
 
@@ -552,53 +556,53 @@ object-src 'none';                    # No plugins
 
 ---
 
-## Kurulum
+## Installation
 
-### Gereksinimler
+### Requirements
 
 - Docker & Docker Compose
-- Go 1.21+ (development için)
-- OpenSSL (setup.sh için)
+- Go 1.21+ (for development)
+- OpenSSL (for setup.sh)
 
-### Hızlı Başlangıç
+### Quick Start
 
 ```bash
 # Clone repository
 git clone <repo-url>
 cd todo-app-yavuzlar
 
-# Setup (otomatik .env oluşturur)
+# Setup (automatically creates .env)
 ./setup.sh
 
-# Build ve test (tüm testler çalışır, başarısız olursa servisler başlamaz)
+# Build and test (all tests run, services won't start if tests fail)
 ./build.sh
 
-# Erişim
+# Access
 open http://localhost
 ```
 
 ### Environment Variables
 
-`setup.sh` otomatik olarak aşağıdaki environment variable'ları oluşturur:
+`setup.sh` automatically creates the following environment variables:
 
-| Değişken | Açıklama | Üretim |
-|----------|----------|--------|
+| Variable | Description | Production |
+|----------|-------------|------------|
 | `ENCRYPTION_KEY` | 32-byte hex encoded AES key (master key) | `openssl rand -hex 32` |
-| `JWT_SECRET` | JWT imzalama anahtarı | `openssl rand -hex 32` |
-| `ACCOUNT_LOOKUP_PEPPER` | HMAC lookup için pepper (>=32 bytes) | `openssl rand -hex 32` |
-| `JWT_EXPIRATION_MINUTES` | JWT token geçerlilik süresi | `15` (default) |
-| `ALLOWED_ORIGIN` | CORS allowed origins | `*` (dev) veya specific domain |
-| `APP_ENV` | Environment mode | `development` veya `production` |
-| `LOG_LEVEL` | Log seviyesi | `debug`, `info`, `warn`, `error` |
-| `DB_HOST` | PostgreSQL host | `postgres` (Docker) veya `localhost` |
+| `JWT_SECRET` | JWT signing key | `openssl rand -hex 32` |
+| `ACCOUNT_LOOKUP_PEPPER` | Pepper for HMAC lookup (>=32 bytes) | `openssl rand -hex 32` |
+| `JWT_EXPIRATION_MINUTES` | JWT token validity period | `15` (default) |
+| `ALLOWED_ORIGIN` | CORS allowed origins | `*` (dev) or specific domain |
+| `APP_ENV` | Environment mode | `development` or `production` |
+| `LOG_LEVEL` | Log level | `debug`, `info`, `warn`, `error` |
+| `DB_HOST` | PostgreSQL host | `postgres` (Docker) or `localhost` |
 | `DB_USER` | PostgreSQL user | `postgres` |
 | `DB_PASSWORD` | PostgreSQL password | `postgres` |
 | `DB_NAME` | Database name | `todos` |
 | `DB_PORT` | PostgreSQL port | `5432` |
-| `DB_SSL_MODE` | SSL mode | `disable` (dev) veya `require` (prod) |
+| `DB_SSL_MODE` | SSL mode | `disable` (dev) or `require` (prod) |
 | `BACKEND_PORT` | Backend server port | `8080` |
 
-### Docker Compose Servisleri
+### Docker Compose Services
 
 - `postgres`: PostgreSQL 15 (Alpine)
 - `backend`: Go backend (Alpine)
@@ -606,7 +610,7 @@ open http://localhost
 
 ---
 
-## API Referansı
+## API Reference
 
 ### Authentication
 
@@ -676,11 +680,11 @@ Content-Type: application/json
 }
 ```
 
-**Not:** `account_number` response'ta yoktur (güvenlik).
+**Note:** `account_number` is not in the response (security).
 
 ### Todos (JWT Required)
 
-Tüm todo endpoint'leri JWT token gerektirir. Token `Authorization` header'ında `Bearer <token>` formatında gönderilmelidir.
+All todo endpoints require a JWT token. The token must be sent in the `Authorization` header as `Bearer <token>`.
 
 #### Get Todos
 
@@ -801,9 +805,9 @@ Authorization: Bearer <JWT>
 
 ---
 
-## Referanslar
+## References
 
-### Kriptografi ve Güvenlik
+### Cryptography and Security
 
 - **AES-256-GCM**: NIST SP 800-38D - Galois/Counter Mode (GCM) for Block Ciphers
 - **Argon2id**: RFC 9106 - Argon2 Memory-Hard Function for Password Hashing and Key Derivation
@@ -815,7 +819,7 @@ Authorization: Bearer <JWT>
 
 - **Zero-Trust Architecture**: NIST SP 800-207 - Zero Trust Architecture
 
-### Teknoloji Stack
+### Technology Stack
 
 - **Go**: https://go.dev/
 - **PostgreSQL**: https://www.postgresql.org/
@@ -823,13 +827,13 @@ Authorization: Bearer <JWT>
 - **Docker**: https://www.docker.com/
 - **GORM**: https://gorm.io/
 
-### İlham Kaynakları
+### Inspiration
 
-- **Mullvad VPN**: AccountNumber-only authentication modeli
+- **Mullvad VPN**: AccountNumber-only authentication model
 - **OWASP**: Security best practices
 - **NIST**: Cryptographic standards
 
-### İlgili Dokümantasyon
+### Related Documentation
 
 - **Go crypto/rand**: https://pkg.go.dev/crypto/rand
 - **Go crypto/aes**: https://pkg.go.dev/crypto/aes
@@ -839,5 +843,5 @@ Authorization: Bearer <JWT>
 
 ---
 
-**Son Güncelleme**: Ocak 2026
-**Versiyon**: 2.0 (AccountNumber-based authentication)
+**Last Updated**: January 2026
+**Version**: 2.0 (AccountNumber-based authentication)
