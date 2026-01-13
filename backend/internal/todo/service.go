@@ -1,9 +1,7 @@
 package todo
 
 import (
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -174,8 +172,8 @@ func (s *TodoService) CreateTodo(userUUIDStr string, req models.TodoRequest) (*T
 		}
 	}
 
-	// Validate tags (max 10 tags, each max 30 chars) and encrypt
-	// SECURITY: Validates UTF-8, null bytes, and truncates by runes (not bytes)
+	// Validate tags (max 10 tags, each max 6 alphanumeric chars) and encrypt
+	// SECURITY: Whitelist validation - only A-Z, a-z, 0-9, max 6 characters
 	var encryptedTags pq.StringArray
 	var plainTags []string
 	tagAAD := encryption.BuildAAD(userUUIDStr, todoID, encryption.FieldTags, encryption.PurposeStoredRecord)
@@ -184,32 +182,15 @@ func (s *TodoService) CreateTodo(userUUIDStr string, req models.TodoRequest) (*T
 			break
 		}
 
-		// Validate UTF-8 encoding
-		if !utf8.ValidString(tag) {
-			s.logger.Warn("CreateTodo: invalid UTF-8 tag, skipping")
+		// Validate tag format using whitelist (only alphanumeric, max 6 chars)
+		validatedTag, err := utils.ValidateTag(tag)
+		if err != nil {
+			s.logger.Warn("CreateTodo: invalid tag format, skipping: %v", err)
 			continue
 		}
 
-		// Check for null bytes (security)
-		if strings.Contains(tag, "\x00") {
-			s.logger.Warn("CreateTodo: null byte in tag, skipping")
-			continue
-		}
-
-		// Trim whitespace
-		tag = strings.TrimSpace(tag)
-		if tag == "" {
-			continue // Skip empty tags
-		}
-
-		// Truncate by runes, not bytes (prevents Unicode corruption)
-		runes := []rune(tag)
-		if len(runes) > 30 {
-			tag = string(runes[:30])
-		}
-
-		plainTags = append(plainTags, tag)
-		encryptedTag, err := encryption.EncryptWithAAD(tag, userKey, tagAAD)
+		plainTags = append(plainTags, validatedTag)
+		encryptedTag, err := encryption.EncryptWithAAD(validatedTag, userKey, tagAAD)
 		if err != nil {
 			s.logger.LogError("EncryptWithAAD (tag)", err)
 			continue
@@ -314,7 +295,7 @@ func (s *TodoService) UpdateTodo(userUUIDStr string, todoIDStr string, req model
 	var responseTags []string
 
 	// Update tags if provided - encrypt each tag
-	// SECURITY: Validates UTF-8, null bytes, and truncates by runes (not bytes)
+	// SECURITY: Whitelist validation - only A-Z, a-z, 0-9, max 6 characters
 	if req.Tags != nil {
 		var encryptedTags pq.StringArray
 		tagAAD := encryption.BuildAAD(userUUIDStr, todoID, encryption.FieldTags, encryption.PurposeStoredRecord)
@@ -323,32 +304,15 @@ func (s *TodoService) UpdateTodo(userUUIDStr string, todoIDStr string, req model
 				break
 			}
 
-			// Validate UTF-8 encoding
-			if !utf8.ValidString(tag) {
-				s.logger.Warn("UpdateTodo: invalid UTF-8 tag, skipping")
+			// Validate tag format using whitelist (only alphanumeric, max 6 chars)
+			validatedTag, err := utils.ValidateTag(tag)
+			if err != nil {
+				s.logger.Warn("UpdateTodo: invalid tag format, skipping: %v", err)
 				continue
 			}
 
-			// Check for null bytes (security)
-			if strings.Contains(tag, "\x00") {
-				s.logger.Warn("UpdateTodo: null byte in tag, skipping")
-				continue
-			}
-
-			// Trim whitespace
-			tag = strings.TrimSpace(tag)
-			if tag == "" {
-				continue // Skip empty tags
-			}
-
-			// Truncate by runes, not bytes (prevents Unicode corruption)
-			runes := []rune(tag)
-			if len(runes) > 30 {
-				tag = string(runes[:30])
-			}
-
-			responseTags = append(responseTags, tag)
-			encryptedTag, err := encryption.EncryptWithAAD(tag, userKey, tagAAD)
+			responseTags = append(responseTags, validatedTag)
+			encryptedTag, err := encryption.EncryptWithAAD(validatedTag, userKey, tagAAD)
 			if err != nil {
 				s.logger.LogError("EncryptWithAAD (tag)", err)
 				continue

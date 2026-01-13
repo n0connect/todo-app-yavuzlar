@@ -70,13 +70,13 @@ func main() {
 // Add http.NewServeMux() for not accept extra endpoints.
 func setupRoutes(mux *http.ServeMux) {
 	mainLogger.Debug("Registering route: POST /api/v1/register")
-	mux.HandleFunc("/api/v1/register", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.RateLimitMiddleware(handlers.RegisterHandler))))
+	mux.HandleFunc("/api/v1/register", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.RateLimitMiddleware(handlers.RegisterHandler)))))
 
 	mainLogger.Debug("Registering route: POST /api/v1/login")
-	mux.HandleFunc("/api/v1/login", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.RateLimitMiddleware(handlers.LoginHandler))))
+	mux.HandleFunc("/api/v1/login", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.RateLimitMiddleware(handlers.LoginHandler)))))
 
 	mainLogger.Debug("Registering route: GET/POST /api/v1/todos")
-	mux.HandleFunc("/api/v1/todos", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/todos", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			handlers.GetTodosHandler(w, r)
@@ -86,10 +86,10 @@ func setupRoutes(mux *http.ServeMux) {
 			mainLogger.Warn("Method not allowed for /api/v1/todos: %s", r.Method)
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}))))
+	})))))
 
 	mainLogger.Debug("Registering route: PUT/DELETE /api/v1/todos/")
-	mux.HandleFunc("/api/v1/todos/", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/todos/", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPut:
 			handlers.UpdateTodoHandler(w, r)
@@ -99,7 +99,14 @@ func setupRoutes(mux *http.ServeMux) {
 			mainLogger.Warn("Method not allowed for /api/v1/todos/: %s", r.Method)
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	}))))
+	})))))
+
+	// Request Path Whitelist: Handle unknown paths with 404
+	// Only registered paths are allowed, all others return 404
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		mainLogger.Warn("Path not found: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "Not Found", http.StatusNotFound)
+	})
 
 	mainLogger.Info("All routes registered successfully")
 }

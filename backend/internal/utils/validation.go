@@ -34,6 +34,9 @@ var (
 
 	// Base64: Only valid base64 characters
 	base64Pattern = regexp.MustCompile(`^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$`)
+
+	// Tag: Only alphanumeric characters (A-Z, a-z, 0-9), maximum 6 characters
+	tagPattern = regexp.MustCompile(`^[a-zA-Z0-9]{1,6}$`)
 )
 
 func ValidateUUID(uuid string) bool {
@@ -166,4 +169,35 @@ func ValidateBase64Data(data string, maxLen int) error {
 	}
 
 	return nil
+}
+
+// ValidateTag validates todo tag format
+// Whitelist: Only alphanumeric characters (A-Z, a-z, 0-9), maximum 6 characters
+// Rejects: Special characters, spaces, Unicode, and tags longer than 6 characters
+func ValidateTag(tag string) (string, error) {
+	validationLogger.Debug("ValidateTag: validating input, length: %d", len(tag))
+
+	// Step 1: Trim whitespace
+	tag = strings.TrimSpace(tag)
+
+	// Step 2: Check if empty
+	if tag == "" {
+		validationLogger.Warn("ValidateTag: empty tag rejected")
+		return "", fmt.Errorf("tag cannot be empty")
+	}
+
+	// Step 3: Check length (in bytes, since we only allow ASCII)
+	if len(tag) > 6 {
+		validationLogger.Warn("ValidateTag: tag too long, length: %d", len(tag))
+		return "", fmt.Errorf("tag too long (maximum 6 characters)")
+	}
+
+	// Step 4: Validate format - only alphanumeric characters
+	if !tagPattern.MatchString(tag) {
+		validationLogger.Warn("ValidateTag: invalid tag format")
+		return "", fmt.Errorf("invalid tag format (only letters and numbers allowed)")
+	}
+
+	validationLogger.Debug("ValidateTag: validation passed, tag: %s", tag)
+	return tag, nil
 }
