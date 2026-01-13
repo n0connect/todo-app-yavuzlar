@@ -310,7 +310,7 @@ async function updateTodoTitle(id, newTitle) {
         }
     } catch (error) {
         console.error('Error updating todo:', error);
-        showError('Network error. Please check your connection and try again.');
+        showError('Please try again.');
     }
 }
 

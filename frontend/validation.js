@@ -128,7 +128,7 @@ function validateTag(tag) {
  */
 function validateTags(tags) {
     if (!Array.isArray(tags)) {
-        return { valid: false, sanitized: [], error: 'tags must be an array' };
+        return { valid: false, sanitized: [], error: 'invalid tags' };
     }
     
     const sanitized = [];
@@ -169,7 +169,7 @@ function validateDate(dateStr) {
     }
     
     if (typeof dateStr !== 'string') {
-        return { valid: false, sanitized: null, error: 'date must be a string' };
+        return { valid: false, sanitized: null, error: 'invalid date' };
     }
     
     // ISO 8601 date format: YYYY-MM-DD
