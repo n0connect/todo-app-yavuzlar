@@ -58,6 +58,15 @@ function setupEventListeners() {
     document.getElementById('showLoginBtn').addEventListener('click', showLogin);
     document.getElementById('showRegisterFormBtn').addEventListener('click', showRegisterForm);
     document.getElementById('backToMenuFromLogin').addEventListener('click', showMainMenu);
+    
+    // Yavuzlar logo click handler (placeholder for future functionality)
+    const yavuzlarLogo = document.getElementById('yavuzlarLogo');
+    if (yavuzlarLogo) {
+        yavuzlarLogo.addEventListener('click', function() {
+            // Placeholder for future functionality
+            console.log('Yavuzlar logo clicked');
+        });
+    }
 
     // Brand title click - go back to main menu
     const loginBrandTitle = document.getElementById('loginBrandTitle');
