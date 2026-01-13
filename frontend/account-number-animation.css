@@ -1,20 +1,20 @@
 /* ========================================
-   FAKE UUID GENERATION ANIMATION
+   FAKE ACCOUNT NUMBER GENERATION ANIMATION
    ======================================== */
 
-.uuid-box {
+.account-number-box {
     margin: 20px 0;
     opacity: 0;
     transform: translateY(20px);
     transition: all 0.3s ease;
 }
 
-.uuid-box.show {
+.account-number-box.show {
     opacity: 1;
     transform: translateY(0);
 }
 
-.uuid-box code {
+.account-number-box code {
     display: block;
     font-family: 'VT323', monospace;
     font-size: 16px;
@@ -30,19 +30,19 @@
 }
 
 /* Subtle generating animation - theme compatible */
-.uuid-box code.generating {
+.account-number-box code.generating {
     border-color: var(--fg-muted);
     color: var(--fg);
 }
 
 /* Masking animation state */
-.uuid-box code.masking {
+.account-number-box code.masking {
     color: var(--fg-muted);
     border-color: var(--border);
 }
 
-/* Revealed state - after real UUID is shown */
-.uuid-box code.revealed {
+/* Revealed state - after real Account Number is shown */
+.account-number-box code.revealed {
     animation: subtleReveal 0.6s ease-out;
     border-color: var(--border);
     color: var(--fg);

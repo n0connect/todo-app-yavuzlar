@@ -14,11 +14,11 @@ function showLogin() {
     document.getElementById('loginContainer').style.display = 'block';
     document.getElementById('registerContainer').style.display = 'none';
     document.getElementById('appContainer').style.display = 'none';
-    document.getElementById('uuidInput').value = '';
+    document.getElementById('accountNumberInput').value = '';
     document.getElementById('loginError').textContent = '';
     document.getElementById('loginSuccess').textContent = '';
     setTimeout(() => {
-        document.getElementById('uuidInput').focus();
+        document.getElementById('accountNumberInput').focus();
     }, 300);
 }
 
@@ -30,25 +30,25 @@ function showRegisterForm() {
     document.getElementById('registerError').textContent = '';
     document.getElementById('registerSuccess').textContent = '';
     
-    // Reset UUID display state
-    const uuidElement = document.getElementById('generatedUUID');
+    // Reset Account Number display state
+    const accountNumberElement = document.getElementById('generatedAccountNumber');
     const continueBtn = document.getElementById('continueBtn');
     const copyBtn = document.getElementById('copyBtn');
-    const uuidBox = document.querySelector('.uuid-box');
+    const accountNumberBox = document.querySelector('.account-number-box');
     
-    uuidElement.textContent = '';
-    uuidElement.classList.remove('generating', 'masking', 'revealed');
+    accountNumberElement.textContent = '';
+    accountNumberElement.classList.remove('generating', 'masking', 'revealed');
     continueBtn.disabled = true;
     if (copyBtn) {
         copyBtn.disabled = false;
     }
-    if (uuidBox) uuidBox.classList.add('show');
+    if (accountNumberBox) accountNumberBox.classList.add('show');
     
-    // Start fake UUID animation immediately
-    startFakeUUIDGeneration(
-        uuidElement,
+    // Start fake Account Number animation immediately
+    startFakeAccountNumberGeneration(
+        accountNumberElement,
         document.getElementById('registerSuccess'),
-        document.getElementById('uuidDisplay')
+        document.getElementById('accountNumberDisplay')
     );
 }
 

@@ -1,12 +1,12 @@
 /* ========================================
-   EYE HOVER PROGRESSIVE UUID REVEAL SYSTEM
+   EYE HOVER PROGRESSIVE ACCOUNT NUMBER REVEAL SYSTEM
    5cm radius zone-based animation controller
    ======================================== */
 
 class EyeHoverAnimation {
     constructor() {
         this.eyeIcon = null;
-        this.uuidInput = null;
+        this.accountNumberInput = null;
         this.isInitialized = false;
         this.currentZone = 'none';
         this.originalValue = '';
@@ -43,12 +43,12 @@ class EyeHoverAnimation {
 
     setupAnimation() {
         this.eyeIcon = document.getElementById('eyeIcon');
-        this.uuidInput = document.getElementById('uuidInput');
+        this.accountNumberInput = document.getElementById('accountNumberInput');
         
-        if (!this.eyeIcon || !this.uuidInput) return;
+        if (!this.eyeIcon || !this.accountNumberInput) return;
 
         // Store original value when input changes
-        this.uuidInput.addEventListener('input', (e) => {
+        this.accountNumberInput.addEventListener('input', (e) => {
             if (this.currentZone === 'none') {
                 this.originalValue = e.target.value;
                 this.generateRevealOrder();
@@ -56,7 +56,7 @@ class EyeHoverAnimation {
         });
 
         // Initialize
-        this.originalValue = this.uuidInput.value;
+        this.originalValue = this.accountNumberInput.value;
         this.generateRevealOrder();
 
         // Track mouse on ENTIRE document (not just wrapper)
@@ -80,7 +80,7 @@ class EyeHoverAnimation {
     }
 
     handleMouseMove(e) {
-        if (!this.eyeIcon || !this.uuidInput) return;
+        if (!this.eyeIcon || !this.accountNumberInput) return;
         
         // Only activate when login container is visible
         const loginContainer = document.getElementById('loginContainer');
@@ -141,7 +141,7 @@ class EyeHoverAnimation {
 
     startAnimation() {
         if (this.animationFrame) return;
-        this.originalValue = this.uuidInput.value;
+        this.originalValue = this.accountNumberInput.value;
         if (!this.originalValue) return;
         this.generateRevealOrder();
         this.animate();
@@ -191,8 +191,8 @@ class EyeHoverAnimation {
         this.displayValue = this.generateDisplayValue(scrambleIntensity);
         
         // Show as text and update display
-        this.uuidInput.type = 'text';
-        this.uuidInput.value = this.displayValue;
+        this.accountNumberInput.type = 'text';
+        this.accountNumberInput.value = this.displayValue;
         
         // Continue animation
         this.animationFrame = requestAnimationFrame(() => this.animate());
@@ -228,8 +228,8 @@ class EyeHoverAnimation {
 
     resetToMasked() {
         this.revealProgress = 0;
-        this.uuidInput.type = 'password';
-        this.uuidInput.value = this.originalValue;
+        this.accountNumberInput.type = 'password';
+        this.accountNumberInput.value = this.originalValue;
         this.displayValue = '';
     }
 
@@ -243,11 +243,13 @@ class EyeHoverAnimation {
 let eyeAnimation = null;
 
 function initEyeAnimation() {
-    const uuidInput = document.getElementById('uuidInput');
+    const accountNumberInput = document.getElementById('accountNumberInput');
     const eyeIcon = document.getElementById('eyeIcon');
     
-    if (uuidInput && eyeIcon && !eyeAnimation) {
+    if (accountNumberInput && eyeIcon && !eyeAnimation) {
         eyeAnimation = new EyeHoverAnimation();
+        // Make eyeAnimation globally accessible for login function
+        window.eyeAnimation = eyeAnimation;
     }
 }
 

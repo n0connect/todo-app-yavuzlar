@@ -3,20 +3,38 @@
 // ========================================
 
 async function login() {
-    const uuidInput = document.getElementById('uuidInput').value.trim();
+    const accountNumberInputElement = document.getElementById('accountNumberInput');
     const errorElement = document.getElementById('loginError');
     const successElement = document.getElementById('loginSuccess');
     
     errorElement.textContent = '';
     successElement.textContent = '';
 
-    if (!uuidInput) {
+    // Check if eye animation is active and mask smoothly if needed
+    if (window.eyeAnimation && window.eyeAnimation.currentZone !== 'none') {
+        // Stop animation and get original value
+        const originalValue = window.eyeAnimation.originalValue || accountNumberInputElement.value;
+        window.eyeAnimation.stopAnimation();
+        window.eyeAnimation.currentZone = 'none';
+        window.eyeAnimation.resetToMasked();
+        
+        // Smoothly mask the input using existing animation
+        await animateInputToMask(accountNumberInputElement, originalValue);
+        
+        // Restore original value after masking
+        accountNumberInputElement.value = originalValue;
+        accountNumberInputElement.type = 'password';
+    }
+
+    const accountNumberInput = accountNumberInputElement.value.trim();
+
+    if (!accountNumberInput) {
         errorElement.textContent = 'please enter account number';
         return;
     }
 
     // Validate format without revealing exact rules
-    if (uuidInput.length !== 32 || !/^[A-Za-z0-9_-]{32}$/.test(uuidInput)) {
+    if (accountNumberInput.length !== 32 || !/^[A-Za-z0-9_-]{32}$/.test(accountNumberInput)) {
         errorElement.textContent = 'invalid format';
         return;
     }
@@ -27,7 +45,7 @@ async function login() {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ account_number: uuidInput })
+            body: JSON.stringify({ account_number: accountNumberInput })
         });
 
         // If fetchWithErrorHandling returned null, it means error was handled and redirected
@@ -43,9 +61,9 @@ async function login() {
         }
 
         if (data.success) {
-            // Store account number (for backward compatibility, still using userUUID variable name)
-            userUUID = uuidInput; // Use input directly since response doesn't include account_number
-            sessionStorage.setItem('userUUID', userUUID);
+            // Store account number
+            userAccountNumber = accountNumberInput;
+            sessionStorage.setItem('userAccountNumber', userAccountNumber);
             
             if (data.token) {
                 sessionStorage.setItem('jwtToken', data.token);
@@ -70,36 +88,36 @@ async function login() {
 }
 
 // Global variables for registration state
-let fakeUUIDInterval = null;
-let pendingRegistrationUUID = null;
+let fakeAccountNumberInterval = null;
+let pendingRegistrationAccountNumber = null;
 let pendingRegistrationToken = null;  // Zero-trust: token from backend
 
-// Fake UUID generation animation - runs continuously until copy is clicked
-function startFakeUUIDGeneration(uuidElement, successElement, uuidDisplay) {
+// Fake Account Number generation animation - runs continuously until copy is clicked
+function startFakeAccountNumberGeneration(accountNumberElement, successElement, accountNumberDisplay) {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     
     // Safety checks
-    if (!uuidElement || !successElement || !uuidDisplay) {
-        console.error('startFakeUUIDGeneration: missing required elements');
+    if (!accountNumberElement || !successElement || !accountNumberDisplay) {
+        console.error('startFakeAccountNumberGeneration: missing required elements');
         return;
     }
     
-    // Show the uuid display area first
-    uuidDisplay.style.display = 'block';
-    const uuidBox = uuidDisplay.querySelector('.uuid-box');
-    if (uuidBox) uuidBox.classList.add('show');
+    // Show the account number display area first
+    accountNumberDisplay.style.display = 'block';
+    const accountNumberBox = accountNumberDisplay.querySelector('.account-number-box');
+    if (accountNumberBox) accountNumberBox.classList.add('show');
     
     successElement.textContent = 'Generating your special Account Number';
-    uuidElement.classList.add('generating');
+    accountNumberElement.classList.add('generating');
     
     // Clear any existing interval
-    if (fakeUUIDInterval) {
-        clearInterval(fakeUUIDInterval);
+    if (fakeAccountNumberInterval) {
+        clearInterval(fakeAccountNumberInterval);
     }
     
     // Start continuous fake AccountNumber generation (base64url: A-Z, a-z, 0-9, _, -)
     const base64urlChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-';
-    fakeUUIDInterval = setInterval(() => {
+    fakeAccountNumberInterval = setInterval(() => {
         let fakeAccountNumber = '';
         for (let i = 0; i < 32; i++) {
             // Mix of base64url characters and occasional * for visual interest
@@ -109,22 +127,22 @@ function startFakeUUIDGeneration(uuidElement, successElement, uuidDisplay) {
                 fakeAccountNumber += base64urlChars.charAt(Math.floor(Math.random() * base64urlChars.length));
             }
         }
-        uuidElement.textContent = fakeAccountNumber;
+        accountNumberElement.textContent = fakeAccountNumber;
     }, 120); // Fast scramble animation
 }
 
-// Stop the fake UUID animation
-function stopFakeUUIDAnimation() {
-    if (fakeUUIDInterval) {
-        clearInterval(fakeUUIDInterval);
-        fakeUUIDInterval = null;
+// Stop the fake Account Number animation
+function stopFakeAccountNumberAnimation() {
+    if (fakeAccountNumberInterval) {
+        clearInterval(fakeAccountNumberInterval);
+        fakeAccountNumberInterval = null;
     }
 }
 
-// Copy button - get real UUID from backend (but don't create account yet)
+// Copy button - get real Account Number from backend (but don't create account yet)
 // Zero-trust: Backend returns a pending_token that we must use to confirm
-async function copyUUID() {
-    const uuidElement = document.getElementById('generatedUUID');
+async function copyAccountNumber() {
+    const accountNumberElement = document.getElementById('generatedAccountNumber');
     const successElement = document.getElementById('registerSuccess');
     const errorElement = document.getElementById('registerError');
     const continueBtn = document.getElementById('continueBtn');
@@ -136,17 +154,17 @@ async function copyUUID() {
     }
     
     // Stop the fake animation
-    stopFakeUUIDAnimation();
+    stopFakeAccountNumberAnimation();
     
     // Show masking animation
-    uuidElement.classList.remove('generating');
-    uuidElement.classList.add('masking');
+    accountNumberElement.classList.remove('generating');
+    accountNumberElement.classList.add('masking');
     successElement.textContent = 'securing your identifier...';
     
     // Animate to all asterisks
-    await animateToMask(uuidElement);
+    await animateToMask(accountNumberElement);
     
-    // Get UUID from backend (Phase 1 - no account creation)
+    // Get Account Number from backend (Phase 1 - no account creation)
     successElement.textContent = 'Generating your special Account Number';
     
     try {
@@ -171,7 +189,7 @@ async function copyUUID() {
         
         if (!data || !data.success) {
             errorElement.textContent = 'request failed';
-            uuidElement.textContent = 'error - try again';
+            accountNumberElement.textContent = 'error - try again';
             // Re-enable copy button on error
             if (copyBtn) {
                 copyBtn.disabled = false;
@@ -192,14 +210,14 @@ async function copyUUID() {
         }
         
         // Store pending AccountNumber and token for account creation on continue
-        pendingRegistrationUUID = realAccountNumber;
+        pendingRegistrationAccountNumber = realAccountNumber;
         pendingRegistrationToken = pendingToken;
         
         // Reveal the real AccountNumber with animation
-        await revealRealUUID(uuidElement, realAccountNumber);
+        await revealRealAccountNumber(accountNumberElement, realAccountNumber);
         
-        uuidElement.classList.remove('masking');
-        uuidElement.classList.add('revealed');
+        accountNumberElement.classList.remove('masking');
+        accountNumberElement.classList.add('revealed');
         successElement.textContent = 'your account number is ready! click continue to create account.';
         
         // Copy to clipboard
@@ -216,7 +234,7 @@ async function copyUUID() {
     } catch (error) {
         errorElement.textContent = 'request failed';
         console.error('AccountNumber generation error:', error);
-        uuidElement.textContent = 'error - try again';
+        accountNumberElement.textContent = 'error - try again';
         // Re-enable copy button on error
         if (copyBtn) {
             copyBtn.disabled = false;
@@ -224,10 +242,10 @@ async function copyUUID() {
     }
 }
 
-// Animate AccountNumber to all asterisks
-function animateToMask(uuidElement) {
+// Animate AccountNumber to all asterisks (for display elements)
+function animateToMask(accountNumberElement) {
     return new Promise((resolve) => {
-        const currentText = uuidElement.textContent;
+        const currentText = accountNumberElement.textContent;
         let masked = currentText.split('');
         let step = 0;
         
@@ -237,13 +255,42 @@ function animateToMask(uuidElement) {
                 const randomIndex = Math.floor(Math.random() * 32);
                 masked[randomIndex] = '*';
             }
-            uuidElement.textContent = masked.join('');
+            accountNumberElement.textContent = masked.join('');
             step++;
             
             // Check if all masked
             if (masked.every(c => c === '*') || step > 20) {
                 clearInterval(maskInterval);
-                uuidElement.textContent = '********************************';
+                accountNumberElement.textContent = '********************************';
+                resolve();
+            }
+        }, 50);
+    });
+}
+
+// Animate input field to all asterisks (for input elements)
+function animateInputToMask(inputElement, originalValue) {
+    return new Promise((resolve) => {
+        const currentValue = inputElement.value || originalValue;
+        let masked = currentValue.split('');
+        let step = 0;
+        
+        // Show as text during animation
+        inputElement.type = 'text';
+        
+        const maskInterval = setInterval(() => {
+            // Mask 2-3 random characters per step
+            for (let i = 0; i < 3; i++) {
+                const randomIndex = Math.floor(Math.random() * masked.length);
+                masked[randomIndex] = '*';
+            }
+            inputElement.value = masked.join('');
+            step++;
+            
+            // Check if all masked
+            if (masked.every(c => c === '*') || step > 20) {
+                clearInterval(maskInterval);
+                inputElement.value = '*'.repeat(masked.length);
                 resolve();
             }
         }, 50);
@@ -251,7 +298,7 @@ function animateToMask(uuidElement) {
 }
 
 // Reveal the real AccountNumber character by character
-function revealRealUUID(uuidElement, realAccountNumber) {
+function revealRealAccountNumber(accountNumberElement, realAccountNumber) {
     return new Promise((resolve) => {
         let revealed = '********************************'.split('');
         let revealOrder = [];
@@ -273,24 +320,24 @@ function revealRealUUID(uuidElement, realAccountNumber) {
                 const idx = revealOrder[step];
                 revealed[idx] = realAccountNumber[idx];
             }
-            uuidElement.textContent = revealed.join('');
+            accountNumberElement.textContent = revealed.join('');
             
             if (step >= 32) {
                 clearInterval(revealInterval);
-                uuidElement.textContent = realAccountNumber;
+                accountNumberElement.textContent = realAccountNumber;
                 resolve();
             }
         }, 40);
     });
 }
 
-async function continueWithUUID() {
-    const generatedUUID = document.getElementById('generatedUUID').textContent;
+async function continueWithAccountNumber() {
+    const generatedAccountNumber = document.getElementById('generatedAccountNumber').textContent;
     const successElement = document.getElementById('registerSuccess');
     const errorElement = document.getElementById('registerError');
     
     // Validate that we have a real AccountNumber (not masked)
-    if (!generatedUUID || generatedUUID.includes('*') || generatedUUID.length !== 32) {
+    if (!generatedAccountNumber || generatedAccountNumber.includes('*') || generatedAccountNumber.length !== 32) {
         showError('Please generate your account number first');
         return;
     }
@@ -306,7 +353,7 @@ async function continueWithUUID() {
     errorElement.textContent = '';
     
     try {
-        // Phase 2: Create account using pending token (not UUID from frontend)
+        // Phase 2: Create account using pending token (not Account Number from frontend)
         const response = await fetch(`${API_BASE_URL}/register`, {
             method: 'POST',
             headers: {
@@ -340,11 +387,11 @@ async function continueWithUUID() {
         }
         
         // Account created successfully - use AccountNumber from response (not frontend)
-        userUUID = data.account_number;
-        sessionStorage.setItem('userUUID', userUUID);
+        userAccountNumber = data.account_number;
+        sessionStorage.setItem('userAccountNumber', userAccountNumber);
         
         // Clear pending state
-        pendingRegistrationUUID = null;
+        pendingRegistrationAccountNumber = null;
         pendingRegistrationToken = null;
         
         // Store JWT token
@@ -355,7 +402,7 @@ async function continueWithUUID() {
             loadTodos();
         } else {
             // Token not provided, try to login
-            loginWithUUID(userUUID);
+            loginWithAccountNumber(userAccountNumber);
         }
         
     } catch (error) {
@@ -366,7 +413,7 @@ async function continueWithUUID() {
 }
 
 // Helper function to login with AccountNumber after registration
-async function loginWithUUID(accountNumber) {
+async function loginWithAccountNumber(accountNumber) {
     try {
         const response = await fetchWithErrorHandling(`${API_BASE_URL}/login`, {
             method: 'POST',
@@ -401,21 +448,21 @@ async function loginWithUUID(accountNumber) {
 }
 
 function logout() {
-    userUUID = null;
-    sessionStorage.removeItem('userUUID');
+    userAccountNumber = null;
+    sessionStorage.removeItem('userAccountNumber');
     sessionStorage.removeItem('jwtToken');
     todos = [];
     showMainMenu();
-    document.getElementById('uuidInput').value = '';
+    document.getElementById('accountNumberInput').value = '';
 }
 
 // Cancel registration - just go back (no account was created yet)
 function cancelRegistration() {
     // Stop the fake animation
-    stopFakeUUIDAnimation();
+    stopFakeAccountNumberAnimation();
     
     // Clear any pending state
-    pendingRegistrationUUID = null;
+    pendingRegistrationAccountNumber = null;
     pendingRegistrationToken = null;
     
     // Return to main menu

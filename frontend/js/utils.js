@@ -3,7 +3,7 @@
 // ========================================
 
 const API_BASE_URL = '/api/v1';
-let userUUID = null;
+let userAccountNumber = null;
 let currentFilter = 'all';
 let todos = [];
 
@@ -81,7 +81,7 @@ function handleErrorResponse(response, context = '') {
         case 401:
             // Special handling: clear token, logout, then redirect
             sessionStorage.removeItem('jwtToken');
-            sessionStorage.removeItem('userUUID');
+            sessionStorage.removeItem('userAccountNumber');
             window.location.href = '/90b6b048-4bc9-4083-8585-9063c8e7332e.html';
             break;
         

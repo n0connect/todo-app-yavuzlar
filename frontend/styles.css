@@ -213,17 +213,17 @@ textarea:focus {
     border-color: var(--fg);
 }
 
-/* UUID Input with Eye Icon - NEVER changes size */
-.uuid-input-wrapper {
+/* Account Number Input with Eye Icon - NEVER changes size */
+.account-number-input-wrapper {
     position: relative;
     display: flex;
     align-items: center;
     flex: 1;
 }
 
-.uuid-input-wrapper input,
-.uuid-input-wrapper input[type="text"],
-.uuid-input-wrapper input[type="password"] {
+.account-number-input-wrapper input,
+.account-number-input-wrapper input[type="text"],
+.account-number-input-wrapper input[type="password"] {
     width: 100%;
     height: 50px;
     font-family: 'VT323', monospace;
@@ -238,9 +238,9 @@ textarea:focus {
     transition: border-color 0.2s ease;
 }
 
-.uuid-input-wrapper input:focus,
-.uuid-input-wrapper input[type="text"]:focus,
-.uuid-input-wrapper input[type="password"]:focus {
+.account-number-input-wrapper input:focus,
+.account-number-input-wrapper input[type="text"]:focus,
+.account-number-input-wrapper input[type="password"]:focus {
     border-color: var(--fg);
 }
 
@@ -347,22 +347,22 @@ button:hover {
 }
 
 /* ========================================
-   UUID DISPLAY
+   ACCOUNT NUMBER DISPLAY
    ======================================== */
 
-.uuid-display {
+.account-number-display {
     margin-top: 24px;
     padding: 24px;
     border: 1px solid var(--border);
     text-align: left;
 }
 
-/* Hide back button when UUID is displayed */
-.register-form:has(.uuid-display[style*="block"]) .text-btn {
+/* Hide back button when Account Number is displayed */
+.register-form:has(.account-number-display[style*="block"]) .text-btn {
     display: none;
 }
 
-.uuid-label {
+.account-number-label {
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: 2px;
@@ -370,14 +370,14 @@ button:hover {
     font-weight: normal;
 }
 
-.uuid-box {
+.account-number-box {
     display: flex;
     gap: 8px;
     align-items: stretch;
     margin-bottom: 16px;
 }
 
-.uuid-box code {
+.account-number-box code {
     flex: 1;
     padding: 12px;
     border: 1px solid var(--border);
@@ -407,7 +407,7 @@ button:hover {
     transform: none;
 }
 
-.uuid-warning {
+.account-number-warning {
     font-size: 14px;
     color: #cc0000;
     margin-bottom: 16px;
@@ -736,11 +736,11 @@ header {
         text-align: center;
     }
 
-    .uuid-box {
+    .account-number-box {
         flex-direction: column;
     }
 
-    .uuid-box code {
+    .account-number-box code {
         font-size: 14px;
         letter-spacing: 1px;
     }
@@ -749,7 +749,7 @@ header {
         width: 100%;
     }
 
-    .uuid-warning {
+    .account-number-warning {
         font-size: 13px;
     }
 }

@@ -6,10 +6,10 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Check if user is already logged in (using sessionStorage, not localStorage)
     const savedToken = sessionStorage.getItem('jwtToken');
-    const savedUUID = sessionStorage.getItem('userUUID');
+    const savedAccountNumber = sessionStorage.getItem('userAccountNumber');
     
     if (savedToken) {
-        userUUID = savedUUID;
+        userAccountNumber = savedAccountNumber;
         showApp();
         loadTodos();
     } else {
@@ -40,25 +40,25 @@ function setupEventListeners() {
 
     // Login page event listeners
     document.getElementById('loginBtn').addEventListener('click', login);
-    document.getElementById('uuidInput').addEventListener('keypress', function(e) {
+    document.getElementById('accountNumberInput').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') login();
     });
     
-    // Eye icon hover to reveal/hide UUID (handled by eye-hover-animation.js)
+    // Eye icon hover to reveal/hide Account Number (handled by eye-hover-animation.js)
     // const eyeIcon = document.getElementById('eyeIcon');
-    // const uuidInput = document.getElementById('uuidInput');
-    // if (eyeIcon && uuidInput) {
+    // const accountNumberInput = document.getElementById('accountNumberInput');
+    // if (eyeIcon && accountNumberInput) {
     //     eyeIcon.addEventListener('mouseenter', function() {
-    //         uuidInput.type = 'text';
+    //         accountNumberInput.type = 'text';
     //     });
     //     eyeIcon.addEventListener('mouseleave', function() {
-    //         uuidInput.type = 'password';
+    //         accountNumberInput.type = 'password';
     //     });
     // }
 
     // Register page event listeners
-    document.getElementById('copyBtn').addEventListener('click', copyUUID);
-    document.getElementById('continueBtn').addEventListener('click', continueWithUUID);
+    document.getElementById('copyBtn').addEventListener('click', copyAccountNumber);
+    document.getElementById('continueBtn').addEventListener('click', continueWithAccountNumber);
     document.getElementById('cancelRegistration').addEventListener('click', cancelRegistration);
 
     // App page event listeners

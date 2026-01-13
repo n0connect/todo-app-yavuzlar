@@ -1,5 +1,5 @@
 /* ========================================
-   EYE HOVER PROGRESSIVE UUID REVEAL ANIMATION
+   EYE HOVER PROGRESSIVE ACCOUNT NUMBER REVEAL ANIMATION
    Layered circular zones with mouse-speed responsive effects
    ======================================== */
 
@@ -24,15 +24,15 @@
     transform: translateY(-50%) scale(1.05);
 }
 
-/* UUID Input wrapper enhanced for hover detection */
-.uuid-input-wrapper {
+/* Account Number Input wrapper enhanced for hover detection */
+.account-number-input-wrapper {
     position: relative;
     overflow: visible;
 }
 
-/* UUID Input enhanced for animation */
-.uuid-input-wrapper input[type="password"],
-.uuid-input-wrapper input[type="text"] {
+/* Account Number Input enhanced for animation */
+.account-number-input-wrapper input[type="password"],
+.account-number-input-wrapper input[type="text"] {
     font-family: 'VT323', monospace;
     letter-spacing: 1.5px;
     transition: all 0.2s ease;
@@ -79,23 +79,23 @@
 }
 
 /* Animation classes for different states */
-.uuid-input-animated {
+.account-number-input-animated {
     position: relative;
 }
 
-.uuid-input-animated.outer-zone {
+.account-number-input-animated.outer-zone {
     animation: outerZoneReveal 0.3s ease-out;
 }
 
-.uuid-input-animated.middle-zone {
+.account-number-input-animated.middle-zone {
     animation: middleZoneReveal 0.2s ease-out;
 }
 
-.uuid-input-animated.inner-zone {
+.account-number-input-animated.inner-zone {
     animation: innerZoneReveal 0.5s ease-out;
 }
 
-.uuid-input-animated.exiting {
+.account-number-input-animated.exiting {
     animation: exitAnimation 0.2s ease-out;
 }
 
@@ -142,17 +142,17 @@
 }
 
 /* Character reveal animation for progressive unveiling */
-.uuid-char-reveal {
+.account-number-char-reveal {
     display: inline-block;
     transition: all 0.1s ease;
     position: relative;
 }
 
-.uuid-char-reveal.revealing {
+.account-number-char-reveal.revealing {
     animation: charFlicker 0.05s infinite alternate;
 }
 
-.uuid-char-reveal.revealed {
+.account-number-char-reveal.revealed {
     animation: none;
     color: inherit;
 }
@@ -188,12 +188,12 @@
 
 /* Smooth transitions for all zone changes */
 .eye-icon,
-.uuid-input-wrapper input {
+.account-number-input-wrapper input {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Performance optimization */
-.uuid-input-wrapper {
+.account-number-input-wrapper {
     will-change: transform;
     backface-visibility: hidden;
     perspective: 1000px;
