@@ -134,8 +134,10 @@ func UpdateTodoHandler(w http.ResponseWriter, r *http.Request) {
 	todoDTO, err := todoService.UpdateTodo(userUUIDStr, idStr, updateData)
 	if err != nil {
 		if err == store.ErrNotFound {
+			// SECURITY: Generic error message to prevent enumeration
+			// Don't distinguish between "todo doesn't exist" and "todo belongs to another user"
 			todoLogger.Warn("UpdateTodoHandler: todo not found id=%s for user: %s", idStr, userUUIDStr)
-			http.Error(w, "Not found", http.StatusNotFound)
+			http.Error(w, "Invalid request", http.StatusBadRequest)
 			return
 		}
 		todoLogger.LogError("TodoService.UpdateTodo", err)
@@ -183,8 +185,10 @@ func DeleteTodoHandler(w http.ResponseWriter, r *http.Request) {
 	err = todoService.DeleteTodo(userUUIDStr, idStr)
 	if err != nil {
 		if err == store.ErrNotFound {
+			// SECURITY: Generic error message to prevent enumeration
+			// Don't distinguish between "todo doesn't exist" and "todo belongs to another user"
 			todoLogger.Warn("DeleteTodoHandler: todo not found id=%s for user: %s", idStr, userUUIDStr)
-			http.Error(w, "Not found", http.StatusNotFound)
+			http.Error(w, "Invalid request", http.StatusBadRequest)
 			return
 		}
 		todoLogger.LogError("TodoService.DeleteTodo", err)

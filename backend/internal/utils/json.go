@@ -99,3 +99,18 @@ func EncodeJSONResponse(w http.ResponseWriter, data interface{}, statusCode int)
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(data)
 }
+
+// WriteAPIError writes a generic error message to the user while logging detailed information
+// SECURITY: publicMsg is shown to users (must be generic), internalErr is only logged
+// This prevents information leakage while maintaining detailed logs for debugging
+func WriteAPIError(w http.ResponseWriter, statusCode int, publicMsg string, logger interface{ LogError(string, error); Warn(string, ...interface{}) }, internalErr error, logContext string) {
+	// Log detailed error information (for debugging/auditing)
+	if logger != nil && internalErr != nil {
+		logger.LogError(logContext, internalErr)
+	} else if logger != nil {
+		logger.Warn("%s: %s", logContext, publicMsg)
+	}
+
+	// Write generic error message to user
+	http.Error(w, publicMsg, statusCode)
+}

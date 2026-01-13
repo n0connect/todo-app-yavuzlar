@@ -133,8 +133,8 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// SECURITY: Generic error message to prevent information leakage
 		// Don't distinguish between expired and invalid tokens
-		authLogger.Warn("Invalid or expired pending registration token")
-		http.Error(w, "Invalid or expired registration token", http.StatusUnauthorized)
+		authLogger.Warn("Invalid or expired pending registration token: %v", err)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -157,8 +157,10 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if exists {
+		// SECURITY: Generic error message to prevent enumeration
+		// Don't reveal that account exists - use same message as invalid token
 		authLogger.Warn("Account already exists (possible replay): %s", utils.MaskAccountNumber(pendingAccountNumber))
-		http.Error(w, "Account already created", http.StatusConflict)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 

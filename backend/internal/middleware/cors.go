@@ -70,8 +70,10 @@ func CORSMiddleware(next http.HandlerFunc) http.HandlerFunc {
 				w.Header().Set("Access-Control-Max-Age", "3600")
 			} else {
 				// If Preflight then return error
+				// SECURITY: Generic error message to prevent information leakage
 				if r.Method == http.MethodOptions {
-					http.Error(w, "CORS origin not allowed", http.StatusForbidden)
+					corsLogger.Warn("CORS origin not allowed: %s", origin)
+					http.Error(w, "Forbidden", http.StatusForbidden)
 					return
 				}
 				// Don't send headers for any other requests.

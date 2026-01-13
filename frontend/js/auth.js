@@ -56,7 +56,7 @@ async function login() {
         const data = await response.json();
         
         if (!data) {
-            errorElement.textContent = 'request failed';
+            errorElement.textContent = getUserFriendlyError(null, response.status);
             return;
         }
 
@@ -79,7 +79,9 @@ async function login() {
                 loadTodos();
             }, 500);
         } else {
-            errorElement.textContent = 'login failed';
+            // SECURITY: Map API error message to generic user-facing message
+            const userMsg = getUserFriendlyError(data.message, response.status);
+            errorElement.textContent = userMsg.toLowerCase();
         }
     } catch (error) {
         errorElement.textContent = 'request failed';
@@ -188,7 +190,9 @@ async function copyAccountNumber() {
         const data = await response.json();
         
         if (!data || !data.success) {
-            errorElement.textContent = 'request failed';
+            // SECURITY: Map API error message to generic user-facing message
+            const userMsg = getUserFriendlyError(data?.message, response.status);
+            errorElement.textContent = userMsg.toLowerCase();
             accountNumberElement.textContent = 'error - try again';
             // Re-enable copy button on error
             if (copyBtn) {
@@ -201,7 +205,8 @@ async function copyAccountNumber() {
         const pendingToken = data.pending_token;
         
         if (!realAccountNumber || realAccountNumber.length !== 32 || !pendingToken) {
-            errorElement.textContent = 'request failed';
+            // SECURITY: Generic error message
+            errorElement.textContent = getUserFriendlyError(null, response.status).toLowerCase();
             // Re-enable copy button on error
             if (copyBtn) {
                 copyBtn.disabled = false;
@@ -232,7 +237,8 @@ async function copyAccountNumber() {
         continueBtn.disabled = false;
         
     } catch (error) {
-        errorElement.textContent = 'request failed';
+        // SECURITY: Generic error message, detailed error only in console
+        errorElement.textContent = getUserFriendlyError(null, 500).toLowerCase();
         console.error('AccountNumber generation error:', error);
         accountNumberElement.textContent = 'error - try again';
         // Re-enable copy button on error
@@ -369,7 +375,9 @@ async function continueWithAccountNumber() {
             // Handle 409 Conflict specially (no status page for this)
             if (response.status === 409) {
                 const data = await response.json().catch(() => ({}));
-                errorElement.textContent = 'operation failed';
+                // SECURITY: Generic error message
+                const userMsg = getUserFriendlyError(data?.message || 'Unauthorized', response.status);
+                errorElement.textContent = userMsg.toLowerCase();
                 showError('Please try logging in instead.');
                 return;
             }
@@ -381,7 +389,9 @@ async function continueWithAccountNumber() {
         const data = await response.json();
         
         if (!data.success) {
-            errorElement.textContent = 'operation failed';
+            // SECURITY: Map API error message to generic user-facing message
+            const userMsg = getUserFriendlyError(data?.message, response.status);
+            errorElement.textContent = userMsg.toLowerCase();
             showError('Please try again.');
             return;
         }
@@ -406,8 +416,9 @@ async function continueWithAccountNumber() {
         }
         
     } catch (error) {
+        // SECURITY: Generic error message, detailed error only in console
         console.error('Account creation error:', error);
-        errorElement.textContent = 'request failed';
+        errorElement.textContent = getUserFriendlyError(null, 500).toLowerCase();
         showError('Please try again.');
     }
 }

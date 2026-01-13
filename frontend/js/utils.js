@@ -62,6 +62,69 @@ function debounce(func, wait) {
 }
 
 // ========================================
+// ERROR MAPPING (SECURITY: Prevent information leakage)
+// ========================================
+
+// Map API error messages to generic user-facing messages
+// SECURITY: Never show raw API error messages to users
+const USER_ERROR_MESSAGES = {
+    // Authentication errors
+    'Invalid credentials': 'Invalid credentials',
+    'Unauthorized': 'Unauthorized',
+    'Invalid request': 'Invalid request',
+    'Invalid or expired registration token': 'Unauthorized',
+    'Account already created': 'Unauthorized',
+    'Pending token required': 'Invalid request',
+    
+    // Generic errors
+    'Internal server error': 'Internal server error',
+    'Method not allowed': 'Method not allowed',
+    'Not found': 'Invalid request',
+    'Too many requests': 'Too many requests',
+    'Forbidden': 'Forbidden',
+    'Unsupported Media Type': 'Invalid request',
+    'CORS origin not allowed': 'Forbidden',
+    
+    // Default fallback
+    'default': 'Request failed'
+};
+
+// Get user-friendly error message from API response
+// SECURITY: Always returns generic message, never leaks internal details
+function getUserFriendlyError(apiMessage, statusCode) {
+    if (!apiMessage) {
+        // Map by status code if no message
+        switch(statusCode) {
+            case 400: return 'Invalid request';
+            case 401: return 'Unauthorized';
+            case 403: return 'Forbidden';
+            case 404: return 'Invalid request';
+            case 429: return 'Too many requests';
+            case 500: return 'Internal server error';
+            default: return USER_ERROR_MESSAGES.default;
+        }
+    }
+    
+    // Normalize message (case-insensitive, trim whitespace)
+    const normalized = apiMessage.trim();
+    
+    // Check exact match first
+    if (USER_ERROR_MESSAGES[normalized]) {
+        return USER_ERROR_MESSAGES[normalized];
+    }
+    
+    // Check case-insensitive match
+    for (const [key, value] of Object.entries(USER_ERROR_MESSAGES)) {
+        if (key.toLowerCase() === normalized.toLowerCase()) {
+            return value;
+        }
+    }
+    
+    // Default fallback - never show raw API message
+    return USER_ERROR_MESSAGES.default;
+}
+
+// ========================================
 // ERROR HANDLING & STATUS PAGE REDIRECTS
 // ========================================
 
@@ -103,8 +166,9 @@ function handleErrorResponse(response, context = '') {
         
         default:
             // Unknown errors - show general error message
+            // SECURITY: Never show status code to user
             if (typeof showError === 'function') {
-                showError(`Unexpected error (${status})`);
+                showError('Request failed');
             } else {
                 console.error(`Unexpected error (${status}):`, context);
             }
