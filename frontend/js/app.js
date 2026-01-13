@@ -106,6 +106,12 @@ function setupEventListeners() {
 function showTodoMenu(event, todoId) {
     event.stopPropagation();
     
+    // Validate todo ID
+    if (!validateTodoId(todoId)) {
+        showError('Invalid todo ID');
+        return;
+    }
+    
     // Remove any existing menu
     const existingMenu = document.querySelector('.todo-context-menu');
     if (existingMenu) existingMenu.remove();
@@ -184,21 +190,56 @@ function showTodoMenu(event, todoId) {
 }
 
 async function setTodoPriority(todoId, priority) {
+    if (!validateTodoId(todoId)) {
+        showError('Invalid todo ID');
+        return;
+    }
+    
     const todo = todos.find(t => t.id === todoId);
     if (!todo) return;
-    await updateTodo(todoId, { priority });
+    
+    const priorityValidation = validatePriority(priority);
+    if (!priorityValidation.valid) {
+        showError(priorityValidation.error);
+        return;
+    }
+    
+    await updateTodo(todoId, { priority: priorityValidation.sanitized });
 }
 
 async function setTodoDueDate(todoId, dateStr) {
+    if (!validateTodoId(todoId)) {
+        showError('Invalid todo ID');
+        return;
+    }
+    
     const todo = todos.find(t => t.id === todoId);
     if (!todo) return;
-    const due_date = dateStr ? dateStr : null;
-    await updateTodo(todoId, { due_date });
+    
+    const dateValidation = validateDate(dateStr || null);
+    if (!dateValidation.valid) {
+        showError(dateValidation.error);
+        return;
+    }
+    
+    await updateTodo(todoId, { due_date: dateValidation.sanitized });
 }
 
 async function setTodoTags(todoId, tagsStr) {
+    if (!validateTodoId(todoId)) {
+        showError('Invalid todo ID');
+        return;
+    }
+    
     const todo = todos.find(t => t.id === todoId);
     if (!todo) return;
-    const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(t => t) : [];
-    await updateTodo(todoId, { tags });
+    
+    const rawTags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(t => t) : [];
+    const tagsValidation = validateTags(rawTags);
+    if (!tagsValidation.valid) {
+        showError(tagsValidation.error);
+        return;
+    }
+    
+    await updateTodo(todoId, { tags: tagsValidation.sanitized });
 }

@@ -356,7 +356,7 @@ async function loginWithUUID(accountNumber) {
         const data = await response.json();
         
         if (response.ok && data.success && data.token) {
-            localStorage.setItem('jwtToken', data.token);
+            sessionStorage.setItem('jwtToken', data.token);
             console.log('JWT token stored from post-registration login');
             showSuccess('Welcome! You\'re now logged in.');
             showApp();

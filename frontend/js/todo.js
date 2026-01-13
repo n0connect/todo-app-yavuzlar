@@ -53,9 +53,31 @@ async function addTodo() {
     }
 
     const title = validation.sanitized;
-    const priority = prioritySelect.value || 'medium';
-    const dueDate = dueDateInput.value || null;
-    const tags = tagsInput.value ? tagsInput.value.split(',').map(t => t.trim()).filter(t => t) : [];
+    
+    // Validate priority against whitelist
+    const priorityValidation = validatePriority(prioritySelect.value || 'medium');
+    if (!priorityValidation.valid) {
+        showError(priorityValidation.error);
+        return;
+    }
+    const priority = priorityValidation.sanitized;
+    
+    // Validate date
+    const dueDateValidation = validateDate(dueDateInput.value || null);
+    if (!dueDateValidation.valid) {
+        showError(dueDateValidation.error);
+        return;
+    }
+    const dueDate = dueDateValidation.sanitized;
+    
+    // Validate tags
+    const rawTags = tagsInput.value ? tagsInput.value.split(',').map(t => t.trim()).filter(t => t) : [];
+    const tagsValidation = validateTags(rawTags);
+    if (!tagsValidation.valid) {
+        showError(tagsValidation.error);
+        return;
+    }
+    const tags = tagsValidation.sanitized;
 
     try {
         const body = { 
@@ -103,6 +125,11 @@ async function addTodo() {
 }
 
 async function toggleTodo(id) {
+    if (!validateTodoId(id)) {
+        showError('Invalid todo ID');
+        return;
+    }
+    
     const todo = todos.find(t => t.id === id);
     if (!todo) return;
 
@@ -143,6 +170,11 @@ async function toggleTodo(id) {
 }
 
 async function deleteTodo(id) {
+    if (!validateTodoId(id)) {
+        showError('Invalid todo ID');
+        return;
+    }
+    
     try {
         const response = await fetch(`${API_BASE_URL}/todos/${id}`, {
             method: 'DELETE',
@@ -172,7 +204,16 @@ async function deleteTodo(id) {
 function startInlineEdit(titleElement) {
     if (titleElement.style.display === 'none') return; // Already editing
     
-    const todo = todos.find(t => t.id === titleElement.closest('.todo-item').dataset.todoId);
+    const todoItem = titleElement.closest('.todo-item');
+    if (!todoItem) return;
+    
+    const todoId = todoItem.dataset.todoId;
+    if (!validateTodoId(todoId)) {
+        showError('Invalid todo ID');
+        return;
+    }
+    
+    const todo = todos.find(t => t.id === todoId);
     if (!todo) return;
     
     const editInput = titleElement.nextElementSibling;
@@ -189,7 +230,15 @@ function startInlineEdit(titleElement) {
 
 // Start inline edit by todo ID (for edit button)
 function startInlineEditById(todoId) {
-    const todoItem = document.querySelector(`.todo-item[data-todo-id="${todoId}"]`);
+    if (!validateTodoId(todoId)) {
+        showError('Invalid todo ID');
+        return;
+    }
+    
+    // Use escapeHtml to prevent XSS in querySelector (defense-in-depth)
+    // Since todoId is validated, this is extra safety
+    const escapedId = escapeHtml(String(todoId));
+    const todoItem = document.querySelector(`.todo-item[data-todo-id="${escapedId}"]`);
     if (!todoItem) return;
     
     const titleElement = todoItem.querySelector('.todo-title');
@@ -201,7 +250,13 @@ function startInlineEditById(todoId) {
 function finishInlineEdit(editInput) {
     const titleElement = editInput.previousElementSibling;
     const todoItem = editInput.closest('.todo-item');
+    if (!todoItem) return;
+    
     const todoId = todoItem.dataset.todoId;
+    if (!validateTodoId(todoId)) {
+        showError('Invalid todo ID');
+        return;
+    }
     
     const newTitle = editInput.value.trim();
     
@@ -234,6 +289,11 @@ function handleEditKeydown(event, editInput) {
 }
 
 async function updateTodoTitle(id, newTitle) {
+    if (!validateTodoId(id)) {
+        showError('Invalid todo ID');
+        return;
+    }
+    
     const todo = todos.find(t => t.id === id);
     if (!todo) return;
 
@@ -272,22 +332,58 @@ async function updateTodoTitle(id, newTitle) {
 
 // Generic update function for context menu
 async function updateTodo(id, updates) {
+    if (!validateTodoId(id)) {
+        showError('Invalid todo ID');
+        return;
+    }
+    
     const todo = todos.find(t => t.id === id);
     if (!todo) return;
 
     try {
+        // Validate priority if provided
+        let priority = todo.priority;
+        if (updates.priority !== undefined) {
+            const priorityValidation = validatePriority(updates.priority);
+            if (!priorityValidation.valid) {
+                showError(priorityValidation.error);
+                return;
+            }
+            priority = priorityValidation.sanitized;
+        }
+        
+        // Validate tags if provided
+        let tags = todo.tags || [];
+        if (updates.tags !== undefined) {
+            const tagsValidation = validateTags(updates.tags);
+            if (!tagsValidation.valid) {
+                showError(tagsValidation.error);
+                return;
+            }
+            tags = tagsValidation.sanitized;
+        }
+        
+        // Validate due_date if provided
+        let due_date = null;
+        if (updates.due_date !== undefined) {
+            const dateValidation = validateDate(updates.due_date);
+            if (!dateValidation.valid) {
+                showError(dateValidation.error);
+                return;
+            }
+            due_date = dateValidation.sanitized;
+        } else if (todo.due_date) {
+            // Extract date part from ISO datetime string
+            due_date = todo.due_date.split('T')[0];
+        }
+        
         const body = {
             title: todo.title,
             completed: todo.completed,
-            priority: updates.priority !== undefined ? updates.priority : todo.priority,
-            tags: updates.tags !== undefined ? updates.tags : todo.tags
+            priority,
+            tags,
+            due_date
         };
-        
-        if (updates.due_date !== undefined) {
-            body.due_date = updates.due_date;
-        } else if (todo.due_date) {
-            body.due_date = todo.due_date.split('T')[0];
-        }
 
         const response = await fetch(`${API_BASE_URL}/todos/${id}`, {
             method: 'PUT',
@@ -345,11 +441,26 @@ async function clearCompleted() {
 // ========================================
 
 function setSortOrder(sort) {
-    currentSort = sort;
+    const sortValidation = validateSortOrder(sort);
+    if (!sortValidation.valid) {
+        showError(sortValidation.error);
+        return;
+    }
+    currentSort = sortValidation.sanitized;
     renderTodos();
 }
 
 function filterByTag(tag) {
+    // Validate tag if provided (null is allowed to clear filter)
+    if (tag !== null && tag !== undefined) {
+        const tagValidation = validateTag(tag);
+        if (!tagValidation.valid) {
+            showError('Invalid tag');
+            return;
+        }
+        tag = tagValidation.sanitized;
+    }
+    
     if (currentTagFilter === tag) {
         currentTagFilter = null; // Toggle off
     } else {
@@ -376,12 +487,17 @@ function renderTagFilters() {
     const allTags = getAllTags();
     
     if (allTags.length === 0) {
-        container.innerHTML = '';
+        // Clear safely using removeChild instead of innerHTML
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
         return;
     }
 
     // Clear and rebuild with event listeners
-    container.innerHTML = '';
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
     
     const label = document.createElement('span');
     label.className = 'tag-filter-label';

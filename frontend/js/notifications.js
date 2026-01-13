@@ -11,7 +11,8 @@ function showNotification(message, type = 'info', duration = 4000) {
     
     const closeBtn = document.createElement('button');
     closeBtn.className = 'close-btn';
-    closeBtn.innerHTML = '&times;';
+    closeBtn.textContent = '×';
+    closeBtn.setAttribute('aria-label', 'Close notification');
     closeBtn.addEventListener('click', function() {
         closeNotification(this);
     });

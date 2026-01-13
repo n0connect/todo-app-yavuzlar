@@ -64,20 +64,36 @@ function showApp() {
 
 function renderTodos() {
     const todoList = document.getElementById('todoList');
-    todoList.innerHTML = '';
+    // Clear safely using removeChild instead of innerHTML
+    while (todoList.firstChild) {
+        todoList.removeChild(todoList.firstChild);
+    }
 
     const filteredTodos = getFilteredAndSortedTodos();
 
     if (filteredTodos.length === 0) {
-        todoList.innerHTML = '<li class="empty-message">no todos found</li>';
+        const emptyMsg = document.createElement('li');
+        emptyMsg.className = 'empty-message';
+        emptyMsg.textContent = 'no todos found';
+        todoList.appendChild(emptyMsg);
         return;
     }
 
     filteredTodos.forEach(todo => {
         const todoItem = document.createElement('li');
-        todoItem.className = `todo-item priority-${todo.priority || 'medium'}`;
-        todoItem.dataset.todoId = todo.id;
-        todoItem.dataset.id = todo.id;
+        // Validate priority before using in className to prevent XSS
+        const priorityValidation = validatePriority(todo.priority || 'medium');
+        const safePriority = priorityValidation.valid ? priorityValidation.sanitized : 'medium';
+        todoItem.className = `todo-item priority-${safePriority}`;
+        
+        // Validate todo ID before setting dataset
+        if (validateTodoId(todo.id)) {
+            todoItem.dataset.todoId = String(todo.id);
+            todoItem.dataset.id = String(todo.id);
+        } else {
+            console.error('Invalid todo ID in render:', todo.id);
+            return; // Skip invalid todos
+        }
         
         // Create checkbox
         const checkbox = document.createElement('input');
@@ -184,13 +200,22 @@ function getFilteredTodos() {
 }
 
 function filterTodos(filter) {
-    currentFilter = filter;
+    const filterValidation = validateFilter(filter);
+    if (!filterValidation.valid) {
+        showError(filterValidation.error);
+        return;
+    }
+    
+    currentFilter = filterValidation.sanitized;
     
     // Update button states
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.classList.remove('active');
     });
-    document.getElementById(`filter${filter.charAt(0).toUpperCase() + filter.slice(1)}`).classList.add('active');
+    const filterBtn = document.getElementById(`filter${currentFilter.charAt(0).toUpperCase() + currentFilter.slice(1)}`);
+    if (filterBtn) {
+        filterBtn.classList.add('active');
+    }
     
     renderTodos();
 }
