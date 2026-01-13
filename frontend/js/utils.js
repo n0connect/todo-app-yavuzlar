@@ -129,8 +129,11 @@ function getUserFriendlyError(apiMessage, statusCode) {
 // ========================================
 
 // Handle error responses and redirect to appropriate status pages
-function handleErrorResponse(response, context = '') {
+async function handleErrorResponse(response, context = '') {
     const status = response.status;
+    
+    // Determine redirect URL first (before reading body)
+    let redirectUrl = null;
     
     switch(status) {
         case 204:
@@ -138,30 +141,30 @@ function handleErrorResponse(response, context = '') {
             return; // Notification is sufficient
         
         case 400:
-            window.location.href = '/76e556a4-0575-4d98-a663-73b1080f26df.html';
+            redirectUrl = '/76e556a4-0575-4d98-a663-73b1080f26df.html';
             break;
         
         case 401:
             // Special handling: clear token, logout, then redirect
             sessionStorage.removeItem('jwtToken');
             sessionStorage.removeItem('userAccountNumber');
-            window.location.href = '/90b6b048-4bc9-4083-8585-9063c8e7332e.html';
+            redirectUrl = '/90b6b048-4bc9-4083-8585-9063c8e7332e.html';
             break;
         
         case 403:
-            window.location.href = '/cb012905-229f-4bf6-bdf4-8778ab34d8d7.html';
+            redirectUrl = '/cb012905-229f-4bf6-bdf4-8778ab34d8d7.html';
             break;
         
         case 404:
-            window.location.href = '/e0ab670f-6801-4475-b337-c08d5adb9e73.html';
+            redirectUrl = '/e0ab670f-6801-4475-b337-c08d5adb9e73.html';
             break;
         
         case 429:
-            window.location.href = '/8ec9c7e3-a58c-40b1-a918-f8cc67c4fc59.html';
+            redirectUrl = '/8ec9c7e3-a58c-40b1-a918-f8cc67c4fc59.html';
             break;
         
         case 500:
-            window.location.href = '/9a24ed32-d32d-4b4b-a70e-a0bfd39f6710.html';
+            redirectUrl = '/9a24ed32-d32d-4b4b-a70e-a0bfd39f6710.html';
             break;
         
         default:
@@ -172,6 +175,25 @@ function handleErrorResponse(response, context = '') {
             } else {
                 console.error(`Unexpected error (${status}):`, context);
             }
+            return; // No redirect for unknown errors
+    }
+    
+    // If we have a redirect URL, perform redirect immediately
+    // Use replace() instead of href to prevent back button issues
+    if (redirectUrl) {
+        // Read response body in background (non-blocking) to prevent potential issues
+        // But don't wait for it - redirect immediately
+        if (!response.bodyUsed) {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                response.json().catch(() => {}); // Consume the body (fire and forget)
+            } else {
+                response.text().catch(() => {}); // Consume the body (fire and forget)
+            }
+        }
+        
+        // Perform redirect immediately using replace() to avoid history issues
+        window.location.replace(redirectUrl);
     }
 }
 
@@ -187,9 +209,9 @@ async function fetchWithErrorHandling(url, options = {}) {
         
         return response;
     } catch (error) {
-        // Network error - redirect to 500 error page
+        // Network error - redirect to 500 error page immediately
         console.error('Network error:', error);
-        window.location.href = '/9a24ed32-d32d-4b4b-a70e-a0bfd39f6710.html';
+        window.location.replace('/9a24ed32-d32d-4b4b-a70e-a0bfd39f6710.html');
         return null;
     }
 }

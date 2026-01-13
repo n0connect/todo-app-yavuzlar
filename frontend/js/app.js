@@ -2,8 +2,42 @@
 // MAIN APPLICATION INITIALIZATION
 // ========================================
 
+// Valid frontend routes (excluding status pages which are handled by nginx)
+const VALID_ROUTES = ['/', ''];
+
+// Check if current URL is a valid frontend route
+function isValidFrontendRoute() {
+    const path = window.location.pathname;
+    
+    // Allow root path
+    if (path === '/' || path === '') {
+        return true;
+    }
+    
+    // Allow status pages (UUID HTML files) - these are handled by nginx
+    const statusPagePattern = /^\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.html$/i;
+    if (statusPagePattern.test(path)) {
+        return true;
+    }
+    
+    // Reject API paths - these should go to backend, not frontend
+    if (path.startsWith('/api/')) {
+        return false;
+    }
+    
+    // Reject any other paths - they don't exist in this SPA
+    return false;
+}
+
 // Initialize event listeners when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
+    // Check if current URL is valid for frontend
+    if (!isValidFrontendRoute()) {
+        // Redirect to 404 page for invalid routes
+        window.location.replace('/e0ab670f-6801-4475-b337-c08d5adb9e73.html');
+        return;
+    }
+    
     // Check if user is already logged in (using sessionStorage, not localStorage)
     const savedToken = sessionStorage.getItem('jwtToken');
     const savedAccountNumber = sessionStorage.getItem('userAccountNumber');

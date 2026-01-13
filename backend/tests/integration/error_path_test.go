@@ -344,8 +344,8 @@ func TestTodoHandler_NotFound(t *testing.T) {
 
 	handler.ServeHTTP(rr, req)
 
-	// Should return 404 Not Found
-	if rr.Code != http.StatusNotFound {
-		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusNotFound)
+	// Should return 400 Bad Request (changed from 404 to prevent enumeration)
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Status code = %d, want %d", rr.Code, http.StatusBadRequest)
 	}
 }
