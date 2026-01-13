@@ -15,20 +15,14 @@ async function login() {
         return;
     }
 
-    // AccountNumber is 32 base64url characters (A-Z, a-z, 0-9, _, -)
-    if (uuidInput.length !== 32) {
-        errorElement.textContent = 'account number must be 32 characters';
-        return;
-    }
-
-    // Base64URL validation: A-Z, a-z, 0-9, _, -
-    if (!/^[A-Za-z0-9_-]{32}$/.test(uuidInput)) {
-        errorElement.textContent = 'account number must contain only A-Z, a-z, 0-9, _, -';
+    // Validate format without revealing exact rules
+    if (uuidInput.length !== 32 || !/^[A-Za-z0-9_-]{32}$/.test(uuidInput)) {
+        errorElement.textContent = 'invalid format';
         return;
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}/login`, {
+        const response = await fetchWithErrorHandling(`${API_BASE_URL}/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -36,14 +30,19 @@ async function login() {
             body: JSON.stringify({ account_number: uuidInput })
         });
 
-        const data = await response.json();
-        
-        if (!data) {
-            errorElement.textContent = 'invalid response';
+        // If fetchWithErrorHandling returned null, it means error was handled and redirected
+        if (!response) {
             return;
         }
 
-        if (response.ok && data.success) {
+        const data = await response.json();
+        
+        if (!data) {
+            errorElement.textContent = 'request failed';
+            return;
+        }
+
+        if (data.success) {
             // Store account number (for backward compatibility, still using userUUID variable name)
             userUUID = uuidInput; // Use input directly since response doesn't include account_number
             sessionStorage.setItem('userUUID', userUUID);
@@ -62,10 +61,10 @@ async function login() {
                 loadTodos();
             }, 500);
         } else {
-            errorElement.textContent = data.message || 'login failed';
+            errorElement.textContent = 'login failed';
         }
     } catch (error) {
-        errorElement.textContent = 'login failed. please try again.';
+        errorElement.textContent = 'request failed';
         console.error('Login error:', error);
     }
 }
@@ -145,7 +144,7 @@ async function copyUUID() {
     successElement.textContent = 'generating your unique identifier...';
     
     try {
-        const response = await fetch(`${API_BASE_URL}/register`, {
+        const response = await fetchWithErrorHandling(`${API_BASE_URL}/register`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -153,10 +152,15 @@ async function copyUUID() {
             body: JSON.stringify({ confirm: false })
         });
 
+        // If fetchWithErrorHandling returned null, it means error was handled and redirected
+        if (!response) {
+            return;
+        }
+
         const data = await response.json();
         
         if (!data || !data.success) {
-            errorElement.textContent = data?.message || 'failed to generate account number';
+            errorElement.textContent = 'request failed';
             uuidElement.textContent = 'error - try again';
             return;
         }
@@ -164,13 +168,8 @@ async function copyUUID() {
         const realAccountNumber = data.account_number;
         const pendingToken = data.pending_token;
         
-        if (!realAccountNumber || realAccountNumber.length !== 32) {
-            errorElement.textContent = 'invalid account number received';
-            return;
-        }
-        
-        if (!pendingToken) {
-            errorElement.textContent = 'security token missing';
+        if (!realAccountNumber || realAccountNumber.length !== 32 || !pendingToken) {
+            errorElement.textContent = 'request failed';
             return;
         }
         
@@ -197,7 +196,7 @@ async function copyUUID() {
         continueBtn.disabled = false;
         
     } catch (error) {
-        errorElement.textContent = 'connection error. please try again.';
+        errorElement.textContent = 'request failed';
         console.error('AccountNumber generation error:', error);
         uuidElement.textContent = 'error - try again';
     }
@@ -270,13 +269,13 @@ async function continueWithUUID() {
     
     // Validate that we have a real AccountNumber (not masked)
     if (!generatedUUID || generatedUUID.includes('*') || generatedUUID.length !== 32) {
-        showError('Please click copy first to generate your account number');
+        showError('Please generate your account number first');
         return;
     }
     
     // Zero-trust: We need the pending token from Phase 1
     if (!pendingRegistrationToken) {
-        showError('Security token expired. Please try again.');
+        showError('Session expired. Please try again.');
         cancelRegistration();
         return;
     }
@@ -297,22 +296,24 @@ async function continueWithUUID() {
             })
         });
 
+        if (!response.ok) {
+            // Handle 409 Conflict specially (no status page for this)
+            if (response.status === 409) {
+                const data = await response.json().catch(() => ({}));
+                errorElement.textContent = 'operation failed';
+                showError('Please try logging in instead.');
+                return;
+            }
+            // For other errors, use error handler (will redirect to status pages)
+            await handleErrorResponse(response, 'register');
+            return;
+        }
+
         const data = await response.json();
         
-        if (!response.ok || !data.success) {
-            if (response.status === 401) {
-                // Token expired or invalid
-                errorElement.textContent = 'registration expired. please try again.';
-                showError('Registration expired. Please start over.');
-                setTimeout(() => cancelRegistration(), 2000);
-            } else if (response.status === 409) {
-                // UUID already taken (shouldn't happen with proper token)
-                errorElement.textContent = 'account already exists.';
-                showError('Account already created. Try logging in.');
-            } else {
-                errorElement.textContent = data?.message || 'account creation failed';
-                showError('Failed to create account. Please try again.');
-            }
+        if (!data.success) {
+            errorElement.textContent = 'operation failed';
+            showError('Please try again.');
             return;
         }
         
@@ -337,15 +338,15 @@ async function continueWithUUID() {
         
     } catch (error) {
         console.error('Account creation error:', error);
-        errorElement.textContent = 'connection error. please try again.';
-        showError('Network error. Please try again.');
+        errorElement.textContent = 'request failed';
+        showError('Please try again.');
     }
 }
 
 // Helper function to login with AccountNumber after registration
 async function loginWithUUID(accountNumber) {
     try {
-        const response = await fetch(`${API_BASE_URL}/login`, {
+        const response = await fetchWithErrorHandling(`${API_BASE_URL}/login`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -353,21 +354,26 @@ async function loginWithUUID(accountNumber) {
             body: JSON.stringify({ account_number: accountNumber })
         });
 
+        // If fetchWithErrorHandling returned null, it means error was handled and redirected
+        if (!response) {
+            return;
+        }
+
         const data = await response.json();
         
-        if (response.ok && data.success && data.token) {
+        if (data.success && data.token) {
             sessionStorage.setItem('jwtToken', data.token);
             console.log('JWT token stored from post-registration login');
             showSuccess('Welcome! You\'re now logged in.');
             showApp();
             loadTodos();
         } else {
-            showError('Failed to login automatically. Please login manually.');
+            showError('Please login manually.');
             showMainMenu();
         }
     } catch (error) {
         console.error('Auto-login error:', error);
-        showError('Network error during auto-login. Please login manually.');
+        showError('Please login manually.');
         showMainMenu();
     }
 }

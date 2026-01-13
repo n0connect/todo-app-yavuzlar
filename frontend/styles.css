@@ -3,7 +3,13 @@
    Inspired by wav.ninja - VT323 Retro Style
    ======================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+@font-face {
+    font-family: 'VT323';
+    src: url('fonts/VT323-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
 
 * {
     margin: 0;
@@ -577,6 +583,58 @@ header {
     margin-top: 48px;
     font-size: 14px;
     color: var(--muted);
+}
+
+/* ========================================
+   STATUS / ERROR PAGES
+   ======================================== */
+
+.status-page {
+    text-align: center;
+}
+
+.status-content {
+    margin-top: 40px;
+}
+
+.status-code {
+    font-size: 64px;
+    letter-spacing: 6px;
+    margin-bottom: 8px;
+}
+
+.status-text {
+    font-size: 22px;
+    text-transform: lowercase;
+    margin-bottom: 16px;
+}
+
+.status-description {
+    font-size: 16px;
+    color: var(--muted);
+    max-width: 360px;
+    margin: 0 auto 24px auto;
+    line-height: 1.6;
+}
+
+.status-actions {
+    margin-bottom: 32px;
+}
+
+.primary-link {
+    display: inline-block;
+    padding: 10px 20px;
+    border: 1px solid var(--border);
+    text-decoration: none;
+    color: var(--fg);
+    text-transform: lowercase;
+    letter-spacing: 1px;
+    transition: all 0.2s ease;
+}
+
+.primary-link:hover {
+    background: var(--hover-bg);
+    color: var(--hover-fg);
 }
 
 /* ========================================

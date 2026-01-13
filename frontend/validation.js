@@ -88,7 +88,7 @@ function validatePriority(priority) {
     const normalized = priority.toLowerCase().trim();
     
     if (!ALLOWED_PRIORITIES.includes(normalized)) {
-        return { valid: false, sanitized: 'medium', error: 'priority must be low, medium, or high' };
+        return { valid: false, sanitized: 'medium', error: 'invalid priority' };
     }
     
     return { valid: true, sanitized: normalized, error: '' };
@@ -115,7 +115,7 @@ function validateTag(tag) {
     }
     
     if (!TAG_PATTERN.test(trimmed)) {
-        return { valid: false, sanitized: '', error: 'tag can only contain letters, numbers, underscore, and hyphen' };
+        return { valid: false, sanitized: '', error: 'invalid tag format' };
     }
     
     return { valid: true, sanitized: trimmed, error: '' };
@@ -175,7 +175,7 @@ function validateDate(dateStr) {
     // ISO 8601 date format: YYYY-MM-DD
     const datePattern = /^\d{4}-\d{2}-\d{2}$/;
     if (!datePattern.test(dateStr)) {
-        return { valid: false, sanitized: null, error: 'date must be in YYYY-MM-DD format' };
+        return { valid: false, sanitized: null, error: 'invalid date format' };
     }
     
     // Validate that it's a valid date

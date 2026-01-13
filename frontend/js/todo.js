@@ -8,32 +8,28 @@ let currentTagFilter = null;
 
 async function loadTodos() {
     try {
-        const response = await fetch(`${API_BASE_URL}/todos`, {
+        const response = await fetchWithErrorHandling(`${API_BASE_URL}/todos`, {
             headers: getAuthHeaders()
         });
 
-        if (response.ok) {
-            const data = await response.json();
-            
-            if (Array.isArray(data)) {
-                todos = data;
-                renderTagFilters();
-                renderTodos();
-                updateTodoCount();
-            } else {
-                console.error('Invalid todos data');
-            }
-        } else if (response.status === 401) {
-            sessionStorage.removeItem('jwtToken');
-            logout();
-            showError('Session expired. Please login again.');
+        // If fetchWithErrorHandling returned null, it means error was handled and redirected
+        if (!response) {
+            return;
+        }
+
+        const data = await response.json();
+        
+        if (Array.isArray(data)) {
+            todos = data;
+            renderTagFilters();
+            renderTodos();
+            updateTodoCount();
         } else {
-            console.error('Failed to load todos');
-            showError('Failed to load todos. Please try again.');
+            console.error('Invalid todos data');
         }
     } catch (error) {
         console.error('Error loading todos:', error);
-        showError('Network error. Unable to load todos.');
+        showError('Unable to load todos.');
     }
 }
 
@@ -90,37 +86,33 @@ async function addTodo() {
             body.due_date = dueDate;
         }
 
-        const response = await fetch(`${API_BASE_URL}/todos`, {
+        const response = await fetchWithErrorHandling(`${API_BASE_URL}/todos`, {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify(body)
         });
 
-        if (response.ok) {
-            const data = await response.json();
-            
-            if (data) {
-                todos.push(data);
-                input.value = '';
-                tagsInput.value = '';
-                dueDateInput.value = '';
-                prioritySelect.value = 'medium';
-                renderTagFilters();
-                renderTodos();
-                updateTodoCount();
-                showSuccess('Todo successfully added');
-            }
-        } else if (response.status === 401) {
-            sessionStorage.removeItem('jwtToken');
-            logout();
-            showError('Session expired. Please login again.');
-        } else {
-            console.error('Failed to create todo');
-            showError('Failed to add todo. Please try again.');
+        // If fetchWithErrorHandling returned null, it means error was handled and redirected
+        if (!response) {
+            return;
+        }
+
+        const data = await response.json();
+        
+        if (data) {
+            todos.push(data);
+            input.value = '';
+            tagsInput.value = '';
+            dueDateInput.value = '';
+            prioritySelect.value = 'medium';
+            renderTagFilters();
+            renderTodos();
+            updateTodoCount();
+            showSuccess('Todo successfully added');
         }
     } catch (error) {
         console.error('Error creating todo:', error);
-        showError('Network error. Please check your connection and try again.');
+        showError('Please try again.');
     }
 }
 
@@ -134,7 +126,7 @@ async function toggleTodo(id) {
     if (!todo) return;
 
     try {
-        const response = await fetch(`${API_BASE_URL}/todos/${id}`, {
+        const response = await fetchWithErrorHandling(`${API_BASE_URL}/todos/${id}`, {
             method: 'PUT',
             headers: getAuthHeaders(),
             body: JSON.stringify({
@@ -143,29 +135,25 @@ async function toggleTodo(id) {
             })
         });
 
-        if (response.ok) {
-            const data = await response.json();
-            
-            if (data) {
-                const index = todos.findIndex(t => t.id === id);
-                todos[index] = data;
-                renderTodos();
-                updateTodoCount();
-                if (data.completed) {
-                    showSuccess('Todo marked as completed');
-                }
+        // If fetchWithErrorHandling returned null, it means error was handled and redirected
+        if (!response) {
+            return;
+        }
+
+        const data = await response.json();
+        
+        if (data) {
+            const index = todos.findIndex(t => t.id === id);
+            todos[index] = data;
+            renderTodos();
+            updateTodoCount();
+            if (data.completed) {
+                showSuccess('Todo marked as completed');
             }
-        } else if (response.status === 401) {
-            sessionStorage.removeItem('jwtToken');
-            logout();
-            showError('Session expired. Please login again.');
-        } else {
-            console.error('Failed to update todo');
-            showError('Failed to update todo. Please try again.');
         }
     } catch (error) {
         console.error('Error updating todo:', error);
-        showError('Network error. Please check your connection and try again.');
+        showError('Please try again.');
     }
 }
 
@@ -176,27 +164,27 @@ async function deleteTodo(id) {
     }
     
     try {
-        const response = await fetch(`${API_BASE_URL}/todos/${id}`, {
+        const response = await fetchWithErrorHandling(`${API_BASE_URL}/todos/${id}`, {
             method: 'DELETE',
             headers: getAuthHeaders()
         });
 
-        if (response.ok || response.status === 204) {
+        // If fetchWithErrorHandling returned null, it means error was handled and redirected
+        // Note: 204 No Content is handled by fetchWithErrorHandling (no redirect, just returns response)
+        if (!response) {
+            return;
+        }
+
+        // 204 No Content means successful deletion
+        if (response.status === 204 || response.ok) {
             todos = todos.filter(t => t.id !== id);
             renderTodos();
             updateTodoCount();
             showSuccess('Todo successfully deleted');
-        } else if (response.status === 401) {
-            sessionStorage.removeItem('jwtToken');
-            logout();
-            showError('Session expired. Please login again.');
-        } else {
-            console.error('Failed to delete todo');
-            showError('Failed to delete todo. Please try again.');
         }
     } catch (error) {
         console.error('Error deleting todo:', error);
-        showError('Network error. Please check your connection and try again.');
+        showError('Please try again.');
     }
 }
 
@@ -298,7 +286,7 @@ async function updateTodoTitle(id, newTitle) {
     if (!todo) return;
 
     try {
-        const response = await fetch(`${API_BASE_URL}/todos/${id}`, {
+        const response = await fetchWithErrorHandling(`${API_BASE_URL}/todos/${id}`, {
             method: 'PUT',
             headers: getAuthHeaders(),
             body: JSON.stringify({
@@ -307,22 +295,18 @@ async function updateTodoTitle(id, newTitle) {
             })
         });
 
-        if (response.ok) {
-            const data = await response.json();
-            
-            if (data) {
-                const index = todos.findIndex(t => t.id === id);
-                todos[index] = data;
-                renderTodos();
-                showSuccess('Todo successfully updated');
-            }
-        } else if (response.status === 401) {
-            sessionStorage.removeItem('jwtToken');
-            logout();
-            showError('Session expired. Please login again.');
-        } else {
-            console.error('Failed to update todo');
-            showError('Failed to update todo. Please try again.');
+        // If fetchWithErrorHandling returned null, it means error was handled and redirected
+        if (!response) {
+            return;
+        }
+
+        const data = await response.json();
+        
+        if (data) {
+            const index = todos.findIndex(t => t.id === id);
+            todos[index] = data;
+            renderTodos();
+            showSuccess('Todo successfully updated');
         }
     } catch (error) {
         console.error('Error updating todo:', error);
@@ -385,39 +369,35 @@ async function updateTodo(id, updates) {
             due_date
         };
 
-        const response = await fetch(`${API_BASE_URL}/todos/${id}`, {
+        const response = await fetchWithErrorHandling(`${API_BASE_URL}/todos/${id}`, {
             method: 'PUT',
             headers: getAuthHeaders(),
             body: JSON.stringify(body)
         });
 
-        if (response.ok) {
-            const data = await response.json();
+        // If fetchWithErrorHandling returned null, it means error was handled and redirected
+        if (!response) {
+            return;
+        }
+
+        const data = await response.json();
+        
+        if (data) {
+            const index = todos.findIndex(t => t.id === id);
+            todos[index] = data;
+            renderTagFilters();
+            renderTodos();
             
-            if (data) {
-                const index = todos.findIndex(t => t.id === id);
-                todos[index] = data;
-                renderTagFilters();
-                renderTodos();
-                
-                // Close context menu
-                const menu = document.querySelector('.todo-context-menu');
-                if (menu) menu.remove();
-                
-                // Show success notification
-                showSuccess('Todo successfully updated');
-            }
-        } else if (response.status === 401) {
-            sessionStorage.removeItem('jwtToken');
-            logout();
-            showError('Session expired. Please login again.');
-        } else {
-            console.error('Failed to update todo');
-            showError('Failed to update todo. Please try again.');
+            // Close context menu
+            const menu = document.querySelector('.todo-context-menu');
+            if (menu) menu.remove();
+            
+            // Show success notification
+            showSuccess('Todo successfully updated');
         }
     } catch (error) {
         console.error('Error updating todo:', error);
-        showError('Network error. Please check your connection and try again.');
+        showError('Please try again.');
     }
 }
 
