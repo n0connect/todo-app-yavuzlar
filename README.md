@@ -10,9 +10,16 @@
 Secure todo application with Bearer CSPRNG token-based AccountNumber-only authentication and per-user encryption.
 
 <div align="center">
-  <img src="frontend/images/c6acc3600c274500faddcc7f376d90a3faeb1f80cbe0dd119f29da9154462f54.png" alt="How we turned a simple todo app into this" width="400" />
-  
-  <p><em>How we turned a simple todo app into this</em></p>
+  <table>
+    <tr>
+      <td style="padding: 5px;">
+        <img src="frontend/images/mainpage.png" alt="Main Page" style="max-width: 100%; height: auto;" />
+      </td>
+      <td style="padding: 5px;">
+        <img src="frontend/images/registerpage.png" alt="Register Page" style="max-width: 100%; height: auto;" />
+      </td>
+    </tr>
+  </table>
 </div>
 
 ---
@@ -315,6 +322,14 @@ Protected endpoints require `Authorization: Bearer <token>` header. Token expire
 
 ---
 
+<div align="center">
+  <img src="frontend/images/c6acc3600c274500faddcc7f376d90a3faeb1f80cbe0dd119f29da9154462f54.png" alt="How we turned a simple todo app into this" width="400" />
+  
+  <p><em>How we turned a simple todo app into this</em></p>
+</div> 
+
+---
+
 **Last Updated**: January 2026
 **Version**: 2.0 (AccountNumber-based authentication)
-**Status**: It is an experimental project that has not been completed. 
+**Status**: It is an experimental project that has not been completed.
