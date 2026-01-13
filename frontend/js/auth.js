@@ -89,7 +89,7 @@ function startFakeUUIDGeneration(uuidElement, successElement, uuidDisplay) {
     const uuidBox = uuidDisplay.querySelector('.uuid-box');
     if (uuidBox) uuidBox.classList.add('show');
     
-    successElement.textContent = 'generating your unique identifier...';
+    successElement.textContent = 'Generating your special Account Number';
     uuidElement.classList.add('generating');
     
     // Clear any existing interval
@@ -128,6 +128,12 @@ async function copyUUID() {
     const successElement = document.getElementById('registerSuccess');
     const errorElement = document.getElementById('registerError');
     const continueBtn = document.getElementById('continueBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    
+    // Disable copy button immediately to prevent multiple clicks
+    if (copyBtn) {
+        copyBtn.disabled = true;
+    }
     
     // Stop the fake animation
     stopFakeUUIDAnimation();
@@ -141,7 +147,7 @@ async function copyUUID() {
     await animateToMask(uuidElement);
     
     // Get UUID from backend (Phase 1 - no account creation)
-    successElement.textContent = 'generating your unique identifier...';
+    successElement.textContent = 'Generating your special Account Number';
     
     try {
         const response = await fetchWithErrorHandling(`${API_BASE_URL}/register`, {
@@ -154,6 +160,10 @@ async function copyUUID() {
 
         // If fetchWithErrorHandling returned null, it means error was handled and redirected
         if (!response) {
+            // Re-enable copy button on error
+            if (copyBtn) {
+                copyBtn.disabled = false;
+            }
             return;
         }
 
@@ -162,6 +172,10 @@ async function copyUUID() {
         if (!data || !data.success) {
             errorElement.textContent = 'request failed';
             uuidElement.textContent = 'error - try again';
+            // Re-enable copy button on error
+            if (copyBtn) {
+                copyBtn.disabled = false;
+            }
             return;
         }
 
@@ -170,6 +184,10 @@ async function copyUUID() {
         
         if (!realAccountNumber || realAccountNumber.length !== 32 || !pendingToken) {
             errorElement.textContent = 'request failed';
+            // Re-enable copy button on error
+            if (copyBtn) {
+                copyBtn.disabled = false;
+            }
             return;
         }
         
@@ -199,6 +217,10 @@ async function copyUUID() {
         errorElement.textContent = 'request failed';
         console.error('AccountNumber generation error:', error);
         uuidElement.textContent = 'error - try again';
+        // Re-enable copy button on error
+        if (copyBtn) {
+            copyBtn.disabled = false;
+        }
     }
 }
 

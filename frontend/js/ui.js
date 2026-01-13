@@ -33,11 +33,15 @@ function showRegisterForm() {
     // Reset UUID display state
     const uuidElement = document.getElementById('generatedUUID');
     const continueBtn = document.getElementById('continueBtn');
+    const copyBtn = document.getElementById('copyBtn');
     const uuidBox = document.querySelector('.uuid-box');
     
     uuidElement.textContent = '';
     uuidElement.classList.remove('generating', 'masking', 'revealed');
     continueBtn.disabled = true;
+    if (copyBtn) {
+        copyBtn.disabled = false;
+    }
     if (uuidBox) uuidBox.classList.add('show');
     
     // Start fake UUID animation immediately

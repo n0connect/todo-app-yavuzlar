@@ -391,6 +391,20 @@ button:hover {
 
 .copy-btn {
     min-width: auto;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transition: all 0.2s ease;
+}
+
+.copy-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+
+.copy-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transform: none;
 }
 
 .uuid-warning {
@@ -408,11 +422,22 @@ button:hover {
     margin-top: 8px;
     background: var(--fg);
     color: var(--bg);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transition: all 0.2s ease;
 }
 
-.continue-btn:hover {
+.continue-btn:hover:not(:disabled) {
     background: var(--muted);
     border-color: var(--muted);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+
+.continue-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transform: none;
 }
 
 /* ========================================
