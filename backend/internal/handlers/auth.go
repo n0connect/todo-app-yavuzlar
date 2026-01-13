@@ -107,10 +107,10 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		authLogger.Debug("Generated preview AccountNumber: %s with pending token", utils.MaskAccountNumber(accountNumber))
 		responseData := models.RegisterResponse{
 			Success:       true,
-			Message:        "Account number generated - click continue to create account",
-			AccountNumber:  accountNumber,
-			PendingToken:   pendingToken,
-			Confirmed:      false,
+			Message:       "Account number generated - click continue to create account",
+			AccountNumber: accountNumber,
+			PendingToken:  pendingToken,
+			Confirmed:     false,
 		}
 		utils.EncodeJSONResponse(w, responseData, http.StatusOK)
 		authLogger.LogResponse(http.StatusOK, "AccountNumber preview generated with pending token")
@@ -171,9 +171,9 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate internal user UUID (for backward compatibility and JWT subject)
-	internalUUID, err := utils.GenerateSecureUUID()
+	internalUUID, err := utils.GenerateInternalID()
 	if err != nil {
-		authLogger.LogError("GenerateSecureUUID", err)
+		authLogger.LogError("GenerateInternalID", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -227,10 +227,10 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	// SECURITY: Don't return AccountNumber in response (already shown to user in Phase 1)
 	// Prevents network sniffing and reduces information leakage
 	responseData := models.RegisterResponse{
-		Success:    true,
-		Message:    "Account created successfully",
-		Token:      token,
-		Confirmed:  true,
+		Success:   true,
+		Message:   "Account created successfully",
+		Token:     token,
+		Confirmed: true,
 	}
 	utils.EncodeJSONResponse(w, responseData, http.StatusCreated)
 	authLogger.LogResponse(http.StatusCreated, "Account created successfully")
@@ -262,7 +262,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	authLogger.Debug("Successfully decoded login request, AccountNumber length: %d", len(req.AccountNumber))
 
-	// Validate AccountNumber format
+	// SECURITY: Validate AccountNumber format with strict regex pattern before any database operations
+	// This prevents unnecessary database queries for invalid formats
+	// Pattern: ^[A-Za-z0-9_-]{32}$ - exactly 32 base64url characters
 	if !utils.ValidateAccountNumber(req.AccountNumber) {
 		authLogger.Warn("Invalid AccountNumber format in login request: %s", utils.MaskAccountNumber(req.AccountNumber))
 		// Perform dummy hash verification to prevent timing attack
@@ -272,7 +274,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	authLogger.Debug("AccountNumber format validated: %s", utils.MaskAccountNumber(req.AccountNumber))
 
-	// Compute lookup for database query
+	// Compute lookup for database query (only reached if format is valid)
 	lookup, err := auth.ComputeAccountLookup(req.AccountNumber)
 	if err != nil {
 		authLogger.LogError("ComputeAccountLookup", err)

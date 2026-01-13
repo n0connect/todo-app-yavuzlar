@@ -60,7 +60,7 @@ func Init() {
 	dbLogger.Info("Successfully connected to PostgreSQL database")
 
 	dbLogger.Debug("Running database migrations...")
-	
+
 	// Step 1: Add AccountLookup and AccountHash as nullable first (if they don't exist)
 	// This handles existing records gracefully
 	if !DB.Migrator().HasColumn(&models.User{}, "account_lookup") {
@@ -75,7 +75,7 @@ func Init() {
 			dbLogger.LogError("Failed to add account_hash column", err)
 		}
 	}
-	
+
 	// Step 2: Delete existing users that don't have AccountLookup/AccountHash
 	// (These are old users from the UUID-based system and are incompatible)
 	dbLogger.Debug("Cleaning up incompatible user records...")
@@ -83,9 +83,10 @@ func Init() {
 	if result.Error == nil && result.RowsAffected > 0 {
 		dbLogger.Info("Deleted %d incompatible user records (missing AccountLookup/AccountHash)", result.RowsAffected)
 	}
-	
+
 	// Step 3: Now run AutoMigrate to set NOT NULL constraints and indexes
-	err = DB.AutoMigrate(&models.User{}, &models.Todo{}) // &models.Requests{} not imported!
+	// Note: models.Requests is not a database model (only for HTTP request/response DTOs)
+	err = DB.AutoMigrate(&models.User{}, &models.Todo{})
 	if err != nil {
 		dbLogger.LogError("Database migration", err)
 		log.Fatal("Failed to migrate database:", err)

@@ -42,7 +42,7 @@ func ComputeAccountLookup(accountNumber string) (string, error) {
 	return lookup, nil
 }
 
-// HashAccountNumber hashes account number using Argon2id
+// HashAccountNumber hashes account number using Argon id
 // Returns encoded hash string with parameters
 func HashAccountNumber(accountNumber string) (string, error) {
 	// Generate random salt

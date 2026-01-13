@@ -1,4 +1,6 @@
-// This model NOT IMPORTED in application or database migration.
+// Package models/requests contains HTTP request/response DTOs only.
+// These models are NOT database entities and are NOT imported in database migrations.
+// They are only used for API request/response serialization.
 
 package models
 
