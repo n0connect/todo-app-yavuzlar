@@ -3,6 +3,9 @@ FROM nginx:alpine
 # Copy frontend files to nginx html directory
 COPY frontend/ /usr/share/nginx/html/
 
+# Ensure proper permissions for all files
+RUN chmod -R 755 /usr/share/nginx/html/
+
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
