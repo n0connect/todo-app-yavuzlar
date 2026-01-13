@@ -89,6 +89,127 @@ check_docker_compose() {
   fi
 }
 
+# Check .env file and required variables
+check_env_file() {
+  local env_file=".env"
+  local missing_vars=()
+  local invalid_vars=()
+  
+  echo ""
+  echo "🔍 Checking .env file and required variables..."
+  echo "================================================"
+  
+  # Check if .env file exists
+  if [ ! -f "$env_file" ]; then
+    echo "❌ ERROR: .env file not found!" >&2
+    echo "" >&2
+    echo "💡 Please create a .env file with the following required variables:" >&2
+    echo "   - JWT_SECRET (at least 32 characters)" >&2
+    echo "   - ENCRYPTION_KEY (32 bytes: 64 hex characters or 32 raw bytes)" >&2
+    echo "   - ACCOUNT_LOOKUP_PEPPER (at least 32 bytes: hex, base64, or raw)" >&2
+    echo "" >&2
+    echo "💡 Example generation commands:" >&2
+    echo "   JWT_SECRET: openssl rand -base64 32" >&2
+    echo "   ENCRYPTION_KEY: openssl rand -hex 32" >&2
+    echo "   ACCOUNT_LOOKUP_PEPPER: openssl rand -hex 32" >&2
+    exit 1
+  fi
+  
+  echo "✅ .env file found"
+  
+  # Helper function to get variable value from .env file
+  get_env_var() {
+    local var_name="$1"
+    # Extract value from .env file, handling comments and whitespace
+    grep -E "^[[:space:]]*${var_name}[[:space:]]*=" "$env_file" | \
+      sed -n "s/^[[:space:]]*${var_name}[[:space:]]*=[[:space:]]*//p" | \
+      sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" | \
+      sed -e 's/[[:space:]]*$//' | \
+      head -n 1
+  }
+  
+  # Check JWT_SECRET
+  local jwt_secret=$(get_env_var "JWT_SECRET")
+  if [ -z "$jwt_secret" ]; then
+    missing_vars+=("JWT_SECRET")
+  elif [ ${#jwt_secret} -lt 32 ]; then
+    invalid_vars+=("JWT_SECRET (must be at least 32 characters, current: ${#jwt_secret})")
+  else
+    echo "✅ JWT_SECRET is set and valid (length: ${#jwt_secret})"
+  fi
+  
+  # Check ENCRYPTION_KEY
+  local encryption_key=$(get_env_var "ENCRYPTION_KEY")
+  if [ -z "$encryption_key" ]; then
+    missing_vars+=("ENCRYPTION_KEY")
+  else
+    local key_len=${#encryption_key}
+    # Check if it's 64 hex characters or 32 raw bytes
+    if [ $key_len -eq 64 ]; then
+      # Check if it's valid hex
+      if [[ "$encryption_key" =~ ^[0-9a-fA-F]{64}$ ]]; then
+        echo "✅ ENCRYPTION_KEY is set and valid (64 hex characters)"
+      else
+        invalid_vars+=("ENCRYPTION_KEY (64 characters but not valid hex format)")
+      fi
+    elif [ $key_len -eq 32 ]; then
+      echo "✅ ENCRYPTION_KEY is set and valid (32 raw bytes)"
+    else
+      invalid_vars+=("ENCRYPTION_KEY (must be 32 bytes or 64 hex characters, current: $key_len)")
+    fi
+  fi
+  
+  # Check ACCOUNT_LOOKUP_PEPPER
+  local account_pepper=$(get_env_var "ACCOUNT_LOOKUP_PEPPER")
+  if [ -z "$account_pepper" ]; then
+    missing_vars+=("ACCOUNT_LOOKUP_PEPPER")
+  else
+    local pepper_len=${#account_pepper}
+    # Try to decode as hex or base64 to get actual byte length
+    local byte_len=$pepper_len
+    
+    # If it's hex (even length and only hex chars), divide by 2
+    if [[ "$account_pepper" =~ ^[0-9a-fA-F]+$ ]] && [ $((pepper_len % 2)) -eq 0 ]; then
+      byte_len=$((pepper_len / 2))
+    fi
+    
+    # Base64 encoded strings are typically longer, but we'll check raw length
+    # The backend accepts hex, base64, or raw bytes, so we check raw length >= 32
+    if [ $byte_len -ge 32 ] || [ $pepper_len -ge 32 ]; then
+      echo "✅ ACCOUNT_LOOKUP_PEPPER is set and valid (length: $pepper_len)"
+    else
+      invalid_vars+=("ACCOUNT_LOOKUP_PEPPER (must be at least 32 bytes, current decoded length: ~$byte_len)")
+    fi
+  fi
+  
+  # Report missing variables
+  if [ ${#missing_vars[@]} -gt 0 ]; then
+    echo "" >&2
+    echo "❌ ERROR: Missing required environment variables:" >&2
+    for var in "${missing_vars[@]}"; do
+      echo "   - $var" >&2
+    done
+    echo "" >&2
+    echo "💡 Please add these variables to your .env file" >&2
+    exit 1
+  fi
+  
+  # Report invalid variables
+  if [ ${#invalid_vars[@]} -gt 0 ]; then
+    echo "" >&2
+    echo "❌ ERROR: Invalid environment variable values:" >&2
+    for var in "${invalid_vars[@]}"; do
+      echo "   - $var" >&2
+    done
+    echo "" >&2
+    echo "💡 Please fix these variables in your .env file" >&2
+    exit 1
+  fi
+  
+  echo "✅ All required environment variables are set and valid"
+  echo ""
+}
+
 # Check dependencies
 echo ""
 echo "🔍 Checking dependencies..."
@@ -98,6 +219,9 @@ check_dependency docker "Docker" true \
   "Visit: https://docs.docker.com/get-docker/"
 check_docker_service
 check_docker_compose
+
+# Check .env file before proceeding
+check_env_file
 
 # Check Go only if running tests locally
 if [ -f "/.dockerenv" ] || grep -q docker /proc/self/cgroup 2>/dev/null; then
