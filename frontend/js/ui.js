@@ -17,9 +17,15 @@ function showLogin() {
     document.getElementById('accountNumberInput').value = '';
     document.getElementById('loginError').textContent = '';
     document.getElementById('loginSuccess').textContent = '';
+    
+    // Re-initialize eye animation when login page is shown
+    // This ensures animation works even if login page is dynamically displayed
     setTimeout(() => {
+        if (typeof initEyeAnimation === 'function') {
+            initEyeAnimation();
+        }
         document.getElementById('accountNumberInput').focus();
-    }, 300);
+    }, 100);
 }
 
 function showRegisterForm() {

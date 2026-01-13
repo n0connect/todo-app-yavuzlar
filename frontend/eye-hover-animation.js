@@ -60,7 +60,9 @@ class EyeHoverAnimation {
         this.generateRevealOrder();
 
         // Track mouse on ENTIRE document (not just wrapper)
-        document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+        // Bind handleMouseMove to preserve 'this' context and store reference for cleanup
+        this.boundHandleMouseMove = this.handleMouseMove.bind(this);
+        document.addEventListener('mousemove', this.boundHandleMouseMove);
         
         this.isInitialized = true;
     }
@@ -235,7 +237,10 @@ class EyeHoverAnimation {
 
     destroy() {
         this.stopAnimation();
-        document.removeEventListener('mousemove', this.handleMouseMove);
+        if (this.boundHandleMouseMove) {
+            document.removeEventListener('mousemove', this.boundHandleMouseMove);
+            this.boundHandleMouseMove = null;
+        }
     }
 }
 
@@ -246,7 +251,13 @@ function initEyeAnimation() {
     const accountNumberInput = document.getElementById('accountNumberInput');
     const eyeIcon = document.getElementById('eyeIcon');
     
-    if (accountNumberInput && eyeIcon && !eyeAnimation) {
+    // Destroy existing animation if it exists
+    if (eyeAnimation) {
+        eyeAnimation.destroy();
+        eyeAnimation = null;
+    }
+    
+    if (accountNumberInput && eyeIcon) {
         eyeAnimation = new EyeHoverAnimation();
         // Make eyeAnimation globally accessible for login function
         window.eyeAnimation = eyeAnimation;
@@ -262,3 +273,6 @@ if (document.readyState === 'loading') {
 window.addEventListener('beforeunload', () => {
     if (eyeAnimation) eyeAnimation.destroy();
 });
+
+// Make initEyeAnimation globally accessible
+window.initEyeAnimation = initEyeAnimation;
