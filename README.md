@@ -243,61 +243,6 @@ PURPOSE: 0x01=Encryption
 | `DB_SSL_MODE` | SSL mode | `disable` (dev) or `require` (prod) |
 | `BACKEND_PORT` | Backend server port | `8080` |
 
-### Setup Scripts
-
-#### `setup.sh`
-
-Initializes the project by creating and configuring the `.env` file with required environment variables.
-
-**What it does:**
-- Creates `.env` file if it doesn't exist
-- Generates cryptographic keys (if not already present):
-  - `ENCRYPTION_KEY`: 32-byte hex encoded AES master key
-  - `JWT_SECRET`: 32-byte hex encoded JWT signing key
-  - `ACCOUNT_LOOKUP_PEPPER`: 32-byte hex encoded pepper for HMAC lookup
-- Sets default values for configuration variables
-- Preserves existing values (won't overwrite if already set)
-
-**Requirements:**
-- OpenSSL (for generating random keys)
-
-**Note:** Run this script once before building the project. It's safe to run multiple times - it won't overwrite existing values.
-
-#### `build.sh`
-
-Builds Docker images, runs all tests, and starts services only if all tests pass.
-
-**What it does:**
-1. Stops current Docker Compose services
-2. Rebuilds Docker images (uses cache when possible)
-3. Runs all tests in order:
-   - Migration tests (must pass first)
-   - Authentication tests
-   - Encryption tests
-   - Middleware tests
-   - Todo service tests
-   - Integration tests
-   - Handler tests
-   - Utils tests
-4. Starts services only if all tests pass
-
-**Test Execution:**
-- If running in Docker environment: Tests run inside Docker container
-- If running locally: Tests run on host (requires database to be running)
-  - If database is not running, script automatically starts it and waits for readiness
-
-**Exit Behavior:**
-- If any test fails: Services will NOT start, script exits with error code
-- If all tests pass: Services start in background (detached mode)
-
-### Docker Compose Services
-
-- `postgres`: PostgreSQL 15 (Alpine)
-- `backend`: Go backend (Alpine)
-- `frontend`: Nginx (Alpine) - SPA + API proxy
-
----
-
 ## API Reference
 
 ### JWT Authentication
@@ -372,3 +317,4 @@ Protected endpoints require `Authorization: Bearer <token>` header. Token expire
 
 **Last Updated**: January 2026
 **Version**: 2.0 (AccountNumber-based authentication)
+**Status**: It is an experimental project that has not been completed. 
