@@ -33,7 +33,7 @@ var (
 	accountNumberPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{32}$`)
 
 	// Base64: Only valid base64 characters
-	base64Pattern = regexp.MustCompile(`^[A-Za-z0-9+/]*={0,2}$`)
+	base64Pattern = regexp.MustCompile(`^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$`)
 )
 
 func ValidateUUID(uuid string) bool {
@@ -43,7 +43,7 @@ func ValidateUUID(uuid string) bool {
 	return uuidPattern.MatchString(uuid)
 }
 
-func GenerateSecureUUID() (string, error) {
+func GenerateInternalID() (string, error) {
 	// Use 24 bytes for better entropy distribution
 	randomBytes := make([]byte, 24)
 	if _, err := rand.Read(randomBytes); err != nil {
@@ -68,7 +68,7 @@ func GenerateSecureUUID() (string, error) {
 		result[i] = alphanumeric[b%62]
 	}
 
-	validationLogger.Debug("GenerateSecureUUID: generated 24-char alphanumeric UUID with CSPRNG")
+	validationLogger.Debug("GenerateInternalID: generated 24-char alphanumeric UUID with CSPRNG")
 	return string(result), nil
 }
 
