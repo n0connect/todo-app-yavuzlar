@@ -9,18 +9,10 @@
 
 Secure todo application with Bearer CSPRNG token-based AccountNumber-only authentication and per-user encryption.
 
-<div align="center">
-  <table>
-    <tr>
-      <td style="padding: 5px;">
-        <img src="frontend/images/mainpage.png" alt="Main Page" style="max-width: 100%; height: auto;" />
-      </td>
-      <td style="padding: 5px;">
-        <img src="frontend/images/registerpage.png" alt="Register Page" style="max-width: 100%; height: auto;" />
-      </td>
-    </tr>
-  </table>
-</div>
+<p align="center">
+  <img src="frontend/images/mainpage.png" alt="Main Page" width="48%" />
+  <img src="frontend/images/registerpage.png" alt="Register Page" width="48%" />
+</p>
 
 ---
 
