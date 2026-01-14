@@ -272,8 +272,6 @@ Protected endpoints require `Authorization: Bearer <token>` header. Token expire
 
 ## References
 
-### Cryptography and Security
-
 - **AES-256-GCM**: NIST SP 800-38D - Galois/Counter Mode (GCM) for Block Ciphers
 - **Argon2id**: RFC 9106 - Argon2 Memory-Hard Function for Password Hashing and Key Derivation
 - **HMAC-SHA256**: RFC 2104 - HMAC: Keyed-Hashing for Message Authentication
@@ -281,13 +279,7 @@ Protected endpoints require `Authorization: Bearer <token>` header. Token expire
 - **Base64URL**: RFC 4648 Section 5 - Base 64 Encoding with URL and Filename Safe Alphabet
 - **UUID**: RFC 4122 - A Universally Unique IDentifier (UUID) URN Namespace
 - **Token Bucket Algorithm**: Rate limiting algorithm for traffic shaping
-
-### Zero-Trust
-
 - **Zero-Trust Architecture**: NIST SP 800-207 - Zero Trust Architecture
-
-### Technology Stack
-
 - **Go**: https://go.dev/
 - **PostgreSQL**: https://www.postgresql.org/
 - **Nginx**: https://nginx.org/
@@ -295,15 +287,9 @@ Protected endpoints require `Authorization: Bearer <token>` header. Token expire
 - **GORM**: https://gorm.io/
 - **Web Storage API**: https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API (SessionStorage)
 - **CORS**: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
-
-### Inspiration
-
 - **Mullvad VPN**: AccountNumber-only authentication model
 - **OWASP**: Security best practices
-- **NIST**: Cryptographic standards
-
-### Related Documentation
-
+- **NIST**: Cryptographic standard's
 - **Go crypto/rand**: https://pkg.go.dev/crypto/rand
 - **Go crypto/aes**: https://pkg.go.dev/crypto/aes
 - **Go crypto/hmac**: https://pkg.go.dev/crypto/hmac
