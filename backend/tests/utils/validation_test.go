@@ -2,15 +2,16 @@ package utils
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 
 	"todo-app-backend/internal/utils"
 )
 
 func TestGenerateAccountNumber_LengthAndCharset(t *testing.T) {
-	// Test that generated account numbers are exactly 32 characters
+	// Test that generated account numbers are exactly 43 characters
 	// and match base64url charset pattern
-	pattern := regexp.MustCompile(`^[A-Za-z0-9_-]{32}$`)
+	pattern := regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
 
 	for i := 0; i < 100; i++ {
 		accountNumber, err := utils.GenerateAccountNumber()
@@ -19,8 +20,8 @@ func TestGenerateAccountNumber_LengthAndCharset(t *testing.T) {
 		}
 
 		// Check length
-		if len(accountNumber) != 32 {
-			t.Errorf("GenerateAccountNumber() length = %d, want 32", len(accountNumber))
+		if len(accountNumber) != 43 {
+			t.Errorf("GenerateAccountNumber() length = %d, want 43", len(accountNumber))
 		}
 
 		// Check charset
@@ -38,68 +39,68 @@ func TestValidateAccountNumber(t *testing.T) {
 		comment string
 	}{
 		{
-			name:    "valid base64url 32 chars",
-			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZab12xx",
+			name:    "valid base64url 43 chars",
+			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg",
 			want:    true,
-			comment: "Valid 32-char base64url string",
+			comment: "Valid 43-char base64url string",
 		},
 		{
 			name:    "valid with numbers",
-			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123xx",
+			input:   strings.Repeat("1", 43),
 			want:    true,
 			comment: "Valid with numbers",
 		},
 		{
 			name:    "valid with underscore",
-			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZab_cdx",
+			input:   strings.Repeat("A", 42) + "_",
 			want:    true,
 			comment: "Valid with underscore",
 		},
 		{
 			name:    "valid with dash",
-			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZab-cdx",
+			input:   strings.Repeat("B", 42) + "-",
 			want:    true,
 			comment: "Valid with dash",
 		},
 		{
 			name:    "valid mixed case",
-			input:   "AbCdEfGhIjKlMnOpQrStUvWxYz123456",
+			input:   strings.Repeat("aB", 21) + "c",
 			want:    true,
 			comment: "Valid mixed case",
 		},
 		{
 			name:    "too short",
-			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZabc",
+			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdef",
 			want:    false,
-			comment: "31 characters (too short)",
+			comment: "Too short",
 		},
 		{
 			name:    "too long",
-			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcde",
+			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghij",
 			want:    false,
-			comment: "33 characters (too long)",
+			comment: "Too long",
 		},
 		{
 			name:    "invalid char plus",
-			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZab+c",
+			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abc+defg",
 			want:    false,
 			comment: "Contains '+' (invalid for base64url)",
 		},
 		{
 			name:    "invalid char slash",
-			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZab/c",
+			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abc/defg",
 			want:    false,
 			comment: "Contains '/' (invalid for base64url)",
 		},
 		{
 			name:    "invalid char equals",
-			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZab=c",
+			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abc=defg",
 			want:    false,
 			comment: "Contains '=' (invalid for base64url)",
 		},
 		{
 			name:    "invalid char space",
-			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZab c",
+			input:   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abc defg",
 			want:    false,
 			comment: "Contains space (invalid)",
 		},
@@ -128,9 +129,9 @@ func TestMaskAccountNumber(t *testing.T) {
 		expected string
 	}{
 		{
-			name:     "normal 32 char",
-			input:    "ABCDEFGHIJKLMNOPQRSTUVWXYZab12xx",
-			expected: "****************************12xx",
+			name:     "normal 43 char",
+			input:    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg",
+			expected: "***************************************defg",
 		},
 		{
 			name:     "short string",

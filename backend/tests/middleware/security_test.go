@@ -13,7 +13,7 @@ func TestSecurityHeadersMiddleware(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
 
-	req := httptest.NewRequest("GET", "/api/v1/todos", nil)
+	req := httptest.NewRequest("GET", "/api/v2/todos", nil)
 
 	rr := httptest.NewRecorder()
 
@@ -29,7 +29,7 @@ func TestSecurityHeadersMiddleware(t *testing.T) {
 	// Verify security headers
 	headers := map[string]string{
 		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":         "DENY",
+		"X-Frame-Options":        "DENY",
 		"Referrer-Policy":        "strict-origin-when-cross-origin",
 	}
 
@@ -50,7 +50,7 @@ func TestSecurityHeadersMiddleware_PermissionsPolicy(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
 
-	req := httptest.NewRequest("GET", "/api/v1/todos", nil)
+	req := httptest.NewRequest("GET", "/api/v2/todos", nil)
 
 	rr := httptest.NewRecorder()
 

@@ -113,7 +113,7 @@ func UpdateTodoHandler(w http.ResponseWriter, r *http.Request) {
 
 	todoLogger.LogRequest(r.Method, r.URL.Path, userUUIDStr)
 
-	idStr := strings.TrimPrefix(r.URL.Path, "/api/v1/todos/")
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/v2/todos/")
 	_, err := uuid.Parse(idStr)
 	if err != nil {
 		todoLogger.LogError("UUID Parse", err)
@@ -172,7 +172,7 @@ func DeleteTodoHandler(w http.ResponseWriter, r *http.Request) {
 
 	todoLogger.LogRequest(r.Method, r.URL.Path, userUUIDStr)
 
-	idStr := strings.TrimPrefix(r.URL.Path, "/api/v1/todos/")
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/v2/todos/")
 	_, err := uuid.Parse(idStr)
 	if err != nil {
 		todoLogger.LogError("UUID Parse", err)

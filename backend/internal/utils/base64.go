@@ -30,15 +30,20 @@ func validateBase64(data string, maxLen int) ([]byte, error) {
 // DecodeBase64Request decodes a base64-encoded JSON request body
 // SECURITY: Limits request body size, nesting depth, and rejects unknown fields
 func DecodeBase64Request(r *http.Request, v interface{}, maxLen int) error {
+	maxBytes, err := maxRequestBodyBytes()
+	if err != nil {
+		return err
+	}
+
 	// Limit request body size
-	limitedReader := io.LimitReader(r.Body, MaxRequestBodySize)
+	limitedReader := io.LimitReader(r.Body, int64(maxBytes))
 	bodyBytes, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return fmt.Errorf("failed to read request body: %w", err)
 	}
 
-	if len(bodyBytes) >= MaxRequestBodySize {
-		return fmt.Errorf("request body too large (max %d bytes)", MaxRequestBodySize)
+	if len(bodyBytes) >= maxBytes {
+		return fmt.Errorf("request body too large (max %d bytes)", maxBytes)
 	}
 
 	// Decode outer JSON (contains base64 data)

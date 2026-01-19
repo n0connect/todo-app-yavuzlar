@@ -34,7 +34,7 @@ async function login() {
     }
 
     // Validate format without revealing exact rules
-    if (accountNumberInput.length !== 32 || !/^[A-Za-z0-9_-]{32}$/.test(accountNumberInput)) {
+    if (accountNumberInput.length !== ACCOUNT_NUMBER_LEN || !ACCOUNT_NUMBER_REGEX.test(accountNumberInput)) {
         errorElement.textContent = 'invalid format';
         return;
     }
@@ -121,7 +121,7 @@ function startFakeAccountNumberGeneration(accountNumberElement, successElement, 
     const base64urlChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-';
     fakeAccountNumberInterval = setInterval(() => {
         let fakeAccountNumber = '';
-        for (let i = 0; i < 32; i++) {
+        for (let i = 0; i < ACCOUNT_NUMBER_LEN; i++) {
             // Mix of base64url characters and occasional * for visual interest
             if (Math.random() < 0.08) {
                 fakeAccountNumber += '*';
@@ -204,7 +204,7 @@ async function copyAccountNumber() {
         const realAccountNumber = data.account_number;
         const pendingToken = data.pending_token;
         
-        if (!realAccountNumber || realAccountNumber.length !== 32 || !pendingToken) {
+        if (!realAccountNumber || realAccountNumber.length !== ACCOUNT_NUMBER_LEN || !pendingToken) {
             // SECURITY: Generic error message
             errorElement.textContent = getUserFriendlyError(null, response.status).toLowerCase();
             // Re-enable copy button on error
@@ -252,14 +252,17 @@ async function copyAccountNumber() {
 function animateToMask(accountNumberElement) {
     return new Promise((resolve) => {
         const currentText = accountNumberElement.textContent;
+        const maskLength = currentText.length || ACCOUNT_NUMBER_LEN;
         let masked = currentText.split('');
         let step = 0;
         
         const maskInterval = setInterval(() => {
             // Mask 2-3 random characters per step
             for (let i = 0; i < 3; i++) {
-                const randomIndex = Math.floor(Math.random() * 32);
-                masked[randomIndex] = '*';
+                const randomIndex = Math.floor(Math.random() * maskLength);
+                if (masked[randomIndex] !== undefined) {
+                    masked[randomIndex] = '*';
+                }
             }
             accountNumberElement.textContent = masked.join('');
             step++;
@@ -267,7 +270,7 @@ function animateToMask(accountNumberElement) {
             // Check if all masked
             if (masked.every(c => c === '*') || step > 20) {
                 clearInterval(maskInterval);
-                accountNumberElement.textContent = '********************************';
+                accountNumberElement.textContent = '*'.repeat(maskLength);
                 resolve();
             }
         }, 50);
@@ -306,11 +309,12 @@ function animateInputToMask(inputElement, originalValue) {
 // Reveal the real AccountNumber character by character
 function revealRealAccountNumber(accountNumberElement, realAccountNumber) {
     return new Promise((resolve) => {
-        let revealed = '********************************'.split('');
+        const totalLength = realAccountNumber.length;
+        let revealed = '*'.repeat(totalLength).split('');
         let revealOrder = [];
         
         // Create random reveal order
-        for (let i = 0; i < 32; i++) {
+        for (let i = 0; i < totalLength; i++) {
             revealOrder.push(i);
         }
         // Shuffle
@@ -322,13 +326,13 @@ function revealRealAccountNumber(accountNumberElement, realAccountNumber) {
         let step = 0;
         const revealInterval = setInterval(() => {
             // Reveal 2-3 characters per step
-            for (let i = 0; i < 3 && step < 32; i++, step++) {
+            for (let i = 0; i < 3 && step < totalLength; i++, step++) {
                 const idx = revealOrder[step];
                 revealed[idx] = realAccountNumber[idx];
             }
             accountNumberElement.textContent = revealed.join('');
             
-            if (step >= 32) {
+            if (step >= totalLength) {
                 clearInterval(revealInterval);
                 accountNumberElement.textContent = realAccountNumber;
                 resolve();
@@ -343,7 +347,7 @@ async function continueWithAccountNumber() {
     const errorElement = document.getElementById('registerError');
     
     // Validate that we have a real AccountNumber (not masked)
-    if (!generatedAccountNumber || generatedAccountNumber.includes('*') || generatedAccountNumber.length !== 32) {
+    if (!generatedAccountNumber || generatedAccountNumber.includes('*') || generatedAccountNumber.length !== ACCOUNT_NUMBER_LEN) {
         showError('Please generate your account number first');
         return;
     }

@@ -2,14 +2,26 @@ package auth
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"todo-app-backend/internal/auth"
+	"todo-app-backend/tests/testutil"
 )
+
+func setupAuthTestEnv(t *testing.T) {
+	t.Helper()
+	testutil.SetupTestEnv(t)
+	t.Cleanup(func() {
+		testutil.TeardownTestEnv(t)
+	})
+}
 
 // TestComputeAccountLookup_Deterministic tests that the same account number
 // with the same pepper produces the same lookup value
 func TestComputeAccountLookup_Deterministic(t *testing.T) {
+	setupAuthTestEnv(t)
+
 	// Set a test pepper
 	originalPepper := os.Getenv("ACCOUNT_LOOKUP_PEPPER")
 	testPepper := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" // 64 hex chars = 32 bytes
@@ -22,7 +34,7 @@ func TestComputeAccountLookup_Deterministic(t *testing.T) {
 		}
 	}()
 
-	accountNumber := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcd"
+	accountNumber := strings.Repeat("A", 43)
 
 	// Compute lookup twice
 	lookup1, err := auth.ComputeAccountLookup(accountNumber)
@@ -48,7 +60,9 @@ func TestComputeAccountLookup_Deterministic(t *testing.T) {
 
 // TestHashAndVerifyAccountNumber tests Argon2id hashing and verification
 func TestHashAndVerifyAccountNumber(t *testing.T) {
-	accountNumber := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcd"
+	setupAuthTestEnv(t)
+
+	accountNumber := strings.Repeat("A", 43)
 
 	// Generate hash
 	hash, err := auth.HashAccountNumber(accountNumber)
@@ -73,7 +87,7 @@ func TestHashAndVerifyAccountNumber(t *testing.T) {
 	}
 
 	// Verify with wrong account number
-	wrongAccountNumber := "ZYXWVUTSRQPONMLKJIHGFEDCBAzyxw"
+	wrongAccountNumber := strings.Repeat("B", 43)
 	err = auth.VerifyAccountNumberHash(hash, wrongAccountNumber)
 	if err == nil {
 		t.Error("VerifyAccountNumberHash() with wrong account number should have failed")
@@ -83,7 +97,9 @@ func TestHashAndVerifyAccountNumber(t *testing.T) {
 // TestHashAndVerifyAccountNumber_DifferentSalts tests that same account number
 // produces different hashes (due to random salt)
 func TestHashAndVerifyAccountNumber_DifferentSalts(t *testing.T) {
-	accountNumber := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcd"
+	setupAuthTestEnv(t)
+
+	accountNumber := strings.Repeat("A", 43)
 
 	// Generate two hashes
 	hash1, err := auth.HashAccountNumber(accountNumber)
@@ -116,7 +132,9 @@ func TestHashAndVerifyAccountNumber_DifferentSalts(t *testing.T) {
 // TestVerifyAccountNumberHash_InvalidFormat_ShouldFail tests that invalid hash formats
 // return errors without panicking
 func TestVerifyAccountNumberHash_InvalidFormat_ShouldFail(t *testing.T) {
-	accountNumber := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcd"
+	setupAuthTestEnv(t)
+
+	accountNumber := strings.Repeat("A", 43)
 
 	tests := []struct {
 		name        string
@@ -203,7 +221,7 @@ func TestVerifyAccountNumberHash_InvalidFormat_ShouldFail(t *testing.T) {
 // TestVerifyAccountNumberHash_Empty_ShouldFail tests that empty inputs fail gracefully
 func TestVerifyAccountNumberHash_Empty_ShouldFail(t *testing.T) {
 	// Empty hash string
-	err := auth.VerifyAccountNumberHash("", "ABCDEFGHIJKLMNOPQRSTUVWXYZabcd")
+	err := auth.VerifyAccountNumberHash("", strings.Repeat("A", 43))
 	if err == nil {
 		t.Error("VerifyAccountNumberHash() with empty hash should have failed")
 	}

@@ -29,7 +29,7 @@ func TestRegisterHandler_Phase1_Integration(t *testing.T) {
 	t.Skip("Integration test requires database connection - see tests/testutil/db.go for setup")
 
 	// Create request
-	req := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer([]byte("{}")))
+	req := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer([]byte("{}")))
 	req.Header.Set("Content-Type", "application/json")
 
 	rr := httptest.NewRecorder()
@@ -64,8 +64,8 @@ func TestRegisterHandler_Phase1_Integration(t *testing.T) {
 		t.Error("Response.AccountNumber should not be empty")
 	}
 
-	if len(response.AccountNumber) != 32 {
-		t.Errorf("Response.AccountNumber length = %d, want 32", len(response.AccountNumber))
+	if len(response.AccountNumber) != 43 {
+		t.Errorf("Response.AccountNumber length = %d, want 43", len(response.AccountNumber))
 	}
 
 	if response.PendingToken == "" {
@@ -85,7 +85,7 @@ func TestRegisterHandler_Phase2_Integration(t *testing.T) {
 	t.Skip("Integration test requires database connection - see tests/testutil/db.go for setup")
 
 	// Phase 1: Generate AccountNumber
-	req1 := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer([]byte("{}")))
+	req1 := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer([]byte("{}")))
 	req1.Header.Set("Content-Type", "application/json")
 	rr1 := httptest.NewRecorder()
 
@@ -110,12 +110,12 @@ func TestRegisterHandler_Phase2_Integration(t *testing.T) {
 
 	// Phase 2: Confirm registration
 	phase2Body := models.RegisterRequest{
-		Confirm:     true,
+		Confirm:      true,
 		PendingToken: phase1Response.PendingToken,
 	}
 
 	bodyBytes, _ := json.Marshal(phase2Body)
-	req2 := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer(bodyBytes))
+	req2 := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer(bodyBytes))
 	req2.Header.Set("Content-Type", "application/json")
 	rr2 := httptest.NewRecorder()
 
@@ -168,7 +168,7 @@ func TestLoginHandler_InvalidAccountNumber(t *testing.T) {
 	}
 
 	bodyBytes, _ := json.Marshal(loginBody)
-	req := httptest.NewRequest("POST", "/api/v1/login", bytes.NewBuffer(bodyBytes))
+	req := httptest.NewRequest("POST", "/api/v2/login", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 
 	rr := httptest.NewRecorder()
@@ -206,7 +206,7 @@ func TestLoginHandler_InvalidJSON(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
 
-	req := httptest.NewRequest("POST", "/api/v1/login", bytes.NewBuffer([]byte("invalid json")))
+	req := httptest.NewRequest("POST", "/api/v2/login", bytes.NewBuffer([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
 
 	rr := httptest.NewRecorder()
@@ -231,7 +231,7 @@ func TestRegisterHandler_InvalidMethod(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
 
-	req := httptest.NewRequest("GET", "/api/v1/register", nil)
+	req := httptest.NewRequest("GET", "/api/v2/register", nil)
 	rr := httptest.NewRecorder()
 
 	handler := middleware.SecurityHeadersMiddleware(

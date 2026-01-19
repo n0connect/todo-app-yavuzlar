@@ -1,15 +1,11 @@
 package encryption
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"io"
 
-	"todo-app-backend/internal/database"
+	"todo-app-backend/internal/cryptoengine"
 	"todo-app-backend/internal/utils"
 )
 
@@ -20,31 +16,20 @@ var cryptoLogger = utils.NewLogger("CRYPTO")
 func EncryptWithKey(text string, key []byte) (string, error) {
 	cryptoLogger.Debug("EncryptWithKey: starting encryption, input length: %d", len(text))
 
+	if len(key) != cryptoengine.AES256KeySize {
+		return "", fmt.Errorf("invalid key length")
+	}
+
 	// Step 1: Base64 encode the raw text first
 	base64Encoded := base64.StdEncoding.EncodeToString([]byte(text))
 	cryptoLogger.Debug("EncryptWithKey: base64 encoded, length: %d", len(base64Encoded))
 
 	// Step 2: AES encrypt the base64 encoded string
-	block, err := aes.NewCipher(key)
+	ciphertext, err := cryptoengine.EncryptAES256GCM(key, []byte(base64Encoded), nil)
 	if err != nil {
-		cryptoLogger.LogError("AES NewCipher", err)
+		cryptoLogger.LogError("EncryptAES256GCM", err)
 		return "", err
 	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		cryptoLogger.LogError("GCM NewGCM", err)
-		return "", err
-	}
-
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		cryptoLogger.LogError("Random nonce generation", err)
-		return "", err
-	}
-	cryptoLogger.Debug("EncryptWithKey: generated nonce, size: %d", len(nonce))
-
-	ciphertext := gcm.Seal(nonce, nonce, []byte(base64Encoded), nil)
 	cryptoLogger.Debug("EncryptWithKey: AES encryption completed, ciphertext length: %d", len(ciphertext))
 
 	// Step 3: Base64 encode the encrypted data for storage
@@ -58,6 +43,10 @@ func EncryptWithKey(text string, key []byte) (string, error) {
 func DecryptWithKey(encryptedText string, key []byte) (string, error) {
 	cryptoLogger.Debug("DecryptWithKey: starting decryption, input length: %d", len(encryptedText))
 
+	if len(key) != cryptoengine.AES256KeySize {
+		return "", fmt.Errorf("invalid key length")
+	}
+
 	// Step 1: Base64 decode the stored encrypted data
 	data, err := base64.StdEncoding.DecodeString(encryptedText)
 	if err != nil {
@@ -67,30 +56,9 @@ func DecryptWithKey(encryptedText string, key []byte) (string, error) {
 	cryptoLogger.Debug("DecryptWithKey: base64 decoded, data length: %d", len(data))
 
 	// Step 2: AES decrypt
-	block, err := aes.NewCipher(key)
+	base64Encoded, err := cryptoengine.DecryptAES256GCM(key, data, nil)
 	if err != nil {
-		cryptoLogger.LogError("AES NewCipher", err)
-		return "", err
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		cryptoLogger.LogError("GCM NewGCM", err)
-		return "", err
-	}
-
-	nonceSize := gcm.NonceSize()
-	if len(data) < nonceSize {
-		cryptoLogger.Error("DecryptWithKey: ciphertext too short: %d < %d", len(data), nonceSize)
-		return "", fmt.Errorf("ciphertext too short")
-	}
-
-	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
-	cryptoLogger.Debug("DecryptWithKey: extracted nonce (size: %d) and ciphertext (size: %d)", len(nonce), len(ciphertext))
-
-	base64Encoded, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		cryptoLogger.LogError("GCM Open (AES decrypt)", err)
+		cryptoLogger.LogError("DecryptAES256GCM", err)
 		return "", err
 	}
 	cryptoLogger.Debug("DecryptWithKey: AES decryption completed, base64 string length: %d", len(base64Encoded))
@@ -108,7 +76,7 @@ func DecryptWithKey(encryptedText string, key []byte) (string, error) {
 
 func EncryptWithMasterKey(text string) (string, error) {
 	cryptoLogger.Debug("EncryptWithMasterKey: starting encryption with master key, input length: %d", len(text))
-	result, err := EncryptWithKey(text, database.EncryptionKey)
+	result, err := EncryptWithKey(text, ActiveMasterKey())
 	if err != nil {
 		cryptoLogger.LogError("EncryptWithMasterKey", err)
 		return "", err
@@ -117,21 +85,47 @@ func EncryptWithMasterKey(text string) (string, error) {
 	return result, nil
 }
 
-func DecryptWithMasterKey(encryptedText string) (string, error) {
+func DecryptWithMasterKey(encryptedText string, keyID string) (string, error) {
 	cryptoLogger.Debug("DecryptWithMasterKey: starting decryption with master key, input length: %d", len(encryptedText))
-	result, err := DecryptWithKey(encryptedText, database.EncryptionKey)
-	if err != nil {
-		cryptoLogger.LogError("DecryptWithMasterKey", err)
-		return "", err
+
+	if keyID != "" {
+		key, ok := MasterKeyByID(keyID)
+		if !ok {
+			return "", fmt.Errorf("unknown master key id")
+		}
+		result, err := DecryptWithKey(encryptedText, key)
+		if err != nil {
+			cryptoLogger.LogError("DecryptWithMasterKey", err)
+			return "", err
+		}
+		cryptoLogger.Debug("DecryptWithMasterKey: successfully decrypted with key id: %s", keyID)
+		return result, nil
 	}
-	cryptoLogger.Debug("DecryptWithMasterKey: successfully decrypted with master key, result length: %d", len(result))
-	return result, nil
+
+	result, err := DecryptWithKey(encryptedText, ActiveMasterKey())
+	if err == nil {
+		cryptoLogger.Debug("DecryptWithMasterKey: successfully decrypted with active key")
+		return result, nil
+	}
+
+	if HasOldMasterKeys() {
+		for oldID, key := range masterKeys.old {
+			plaintext, tryErr := DecryptWithKey(encryptedText, key)
+			if tryErr == nil {
+				cryptoLogger.Warn("DecryptWithMasterKey: decrypted with old key id=%s", oldID)
+				return plaintext, nil
+			}
+		}
+	}
+
+	cryptoLogger.LogError("DecryptWithMasterKey", err)
+	return "", err
 }
 
 func GenerateUserAESKey() ([]byte, error) {
 	cryptoLogger.Debug("GenerateUserAESKey: generating new 32-byte AES key")
-	key := make([]byte, 32)
-	if _, err := rand.Read(key); err != nil {
+	key, err := cryptoengine.RandomBytes(cryptoengine.AES256KeySize)
+	if err != nil {
 		cryptoLogger.LogError("GenerateUserAESKey", err)
 		return nil, fmt.Errorf("failed to generate user AES key: %w", err)
 	}
@@ -141,7 +135,7 @@ func GenerateUserAESKey() ([]byte, error) {
 
 // DecryptUserKey decrypts an encrypted user key and returns the raw AES key
 // This function is separated from database access for better modularity
-func DecryptUserKey(encryptedKey string) ([]byte, error) {
+func DecryptUserKey(encryptedKey string, keyID string) ([]byte, error) {
 	cryptoLogger.Debug("DecryptUserKey: starting decryption, encryptedKey length: %d", len(encryptedKey))
 
 	if encryptedKey == "" {
@@ -150,7 +144,7 @@ func DecryptUserKey(encryptedKey string) ([]byte, error) {
 	}
 
 	cryptoLogger.Debug("DecryptUserKey: decrypting user key with master key")
-	decryptedKeyHex, err := DecryptWithMasterKey(encryptedKey)
+	decryptedKeyHex, err := DecryptWithMasterKey(encryptedKey, keyID)
 	if err != nil {
 		cryptoLogger.LogError("DecryptUserKey", err)
 		return nil, fmt.Errorf("failed to decrypt user key: %w", err)
@@ -177,93 +171,53 @@ func DecryptUserKey(encryptedKey string) ([]byte, error) {
 // Flow: raw data -> base64 encode -> AES-GCM encrypt (with AAD) -> base64 encode
 func EncryptWithAAD(text string, key []byte, aad []byte) (string, error) {
 	cryptoLogger.Debug("EncryptWithAAD: starting encryption, input length: %d, AAD length: %d", len(text), len(aad))
+	if err := validateKeyAndAAD(key, aad, AADLength); err != nil {
+		return "", err
+	}
 
-	// Step 1: Base64 encode the raw text first
-	base64Encoded := base64.StdEncoding.EncodeToString([]byte(text))
-	cryptoLogger.Debug("EncryptWithAAD: base64 encoded, length: %d", len(base64Encoded))
-
-	// Step 2: AES-GCM encrypt with AAD
-	block, err := aes.NewCipher(key)
+	ciphertext, err := cryptoengine.EncryptAES256GCM(key, []byte(text), aad)
 	if err != nil {
-		cryptoLogger.LogError("AES NewCipher", err)
+		cryptoLogger.LogError("EncryptAES256GCM", err)
 		return "", err
 	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		cryptoLogger.LogError("GCM NewGCM", err)
-		return "", err
-	}
-
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		cryptoLogger.LogError("Random nonce generation", err)
-		return "", err
-	}
-	cryptoLogger.Debug("EncryptWithAAD: generated nonce, size: %d", len(nonce))
-
-	// Use AAD in Seal operation
-	ciphertext := gcm.Seal(nonce, nonce, []byte(base64Encoded), aad)
-	cryptoLogger.Debug("EncryptWithAAD: AES-GCM encryption with AAD completed, ciphertext length: %d", len(ciphertext))
-
-	// Step 3: Base64 encode the encrypted data for storage
 	result := base64.StdEncoding.EncodeToString(ciphertext)
-	cryptoLogger.Debug("EncryptWithAAD: final base64 encoding completed, result length: %d", len(result))
+	cryptoLogger.Debug("EncryptWithAAD: encryption completed, result length: %d", len(result))
 	return result, nil
 }
 
 // DecryptWithAAD decrypts data with Additional Authenticated Data (AAD)
 // AAD must match the AAD used during encryption, otherwise decryption fails
-// Flow: encrypted data -> base64 decode -> AES-GCM decrypt (with AAD) -> base64 decode -> raw data
+// Flow: encrypted data -> base64 decode -> AES-GCM decrypt (with AAD) -> raw data
 func DecryptWithAAD(encryptedText string, key []byte, aad []byte) (string, error) {
 	cryptoLogger.Debug("DecryptWithAAD: starting decryption, input length: %d, AAD length: %d", len(encryptedText), len(aad))
+	if err := validateKeyAndAAD(key, aad, AADLength); err != nil {
+		return "", err
+	}
 
-	// Step 1: Base64 decode the stored encrypted data
 	data, err := base64.StdEncoding.DecodeString(encryptedText)
 	if err != nil {
 		cryptoLogger.LogError("Base64 decode (step 1)", err)
 		return "", err
 	}
-	cryptoLogger.Debug("DecryptWithAAD: base64 decoded, data length: %d", len(data))
 
-	// Step 2: AES-GCM decrypt with AAD
-	block, err := aes.NewCipher(key)
+	plaintext, err := cryptoengine.DecryptAES256GCM(key, data, aad)
 	if err != nil {
-		cryptoLogger.LogError("AES NewCipher", err)
-		return "", err
+		cryptoLogger.LogError("DecryptAES256GCM", err)
+		return "", fmt.Errorf("decryption failed: AAD mismatch or invalid ciphertext")
 	}
 
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		cryptoLogger.LogError("GCM NewGCM", err)
-		return "", err
-	}
-
-	nonceSize := gcm.NonceSize()
-	if len(data) < nonceSize {
-		cryptoLogger.Error("DecryptWithAAD: ciphertext too short: %d < %d", len(data), nonceSize)
-		return "", fmt.Errorf("ciphertext too short")
-	}
-
-	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
-	cryptoLogger.Debug("DecryptWithAAD: extracted nonce (size: %d) and ciphertext (size: %d)", len(nonce), len(ciphertext))
-
-	// Use AAD in Open operation - if AAD doesn't match, this will fail
-	base64Encoded, err := gcm.Open(nil, nonce, ciphertext, aad)
-	if err != nil {
-		cryptoLogger.LogError("GCM Open (AES decrypt with AAD)", err)
-		cryptoLogger.Error("DecryptWithAAD: AAD verification failed - potential security issue (wrong user/todo/field)")
-		return "", fmt.Errorf("decryption failed: AAD mismatch or invalid ciphertext: %w", err)
-	}
-	cryptoLogger.Debug("DecryptWithAAD: AES-GCM decryption with AAD completed, base64 string length: %d", len(base64Encoded))
-
-	// Step 3: Base64 decode to get original text
-	plaintext, err := base64.StdEncoding.DecodeString(string(base64Encoded))
-	if err != nil {
-		cryptoLogger.LogError("Base64 decode (step 2)", err)
-		return "", fmt.Errorf("failed to decode base64: %w", err)
-	}
-	cryptoLogger.Debug("DecryptWithAAD: final base64 decode completed, plaintext length: %d", len(plaintext))
-
+	cryptoLogger.Debug("DecryptWithAAD: decryption completed, plaintext length: %d", len(plaintext))
 	return string(plaintext), nil
+}
+
+func validateKeyAndAAD(key []byte, aad []byte, expectedAADLen int) error {
+	if len(key) != cryptoengine.AES256KeySize {
+		cryptoLogger.Error("Invalid key length: %d", len(key))
+		return fmt.Errorf("invalid key length")
+	}
+	if len(aad) != expectedAADLen {
+		cryptoLogger.Error("Invalid AAD length: %d (expected %d)", len(aad), expectedAADLen)
+		return fmt.Errorf("invalid AAD length")
+	}
+	return nil
 }

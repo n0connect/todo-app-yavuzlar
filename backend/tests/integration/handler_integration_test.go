@@ -26,7 +26,7 @@ func TestRegisterHandler_EndToEnd(t *testing.T) {
 	defer testutil.CleanupTestData(t)
 
 	// Phase 1: Generate AccountNumber
-	req1 := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer([]byte("{}")))
+	req1 := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer([]byte("{}")))
 	req1.Header.Set("Content-Type", "application/json")
 	rr1 := httptest.NewRecorder()
 
@@ -57,8 +57,8 @@ func TestRegisterHandler_EndToEnd(t *testing.T) {
 		t.Error("Phase 1 Response.AccountNumber should not be empty")
 	}
 
-	if len(phase1Response.AccountNumber) != 32 {
-		t.Errorf("Phase 1 Response.AccountNumber length = %d, want 32", len(phase1Response.AccountNumber))
+	if len(phase1Response.AccountNumber) != 43 {
+		t.Errorf("Phase 1 Response.AccountNumber length = %d, want 43", len(phase1Response.AccountNumber))
 	}
 
 	if phase1Response.PendingToken == "" {
@@ -76,7 +76,7 @@ func TestRegisterHandler_EndToEnd(t *testing.T) {
 	}
 
 	bodyBytes, _ := json.Marshal(phase2Body)
-	req2 := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer(bodyBytes))
+	req2 := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer(bodyBytes))
 	req2.Header.Set("Content-Type", "application/json")
 	rr2 := httptest.NewRecorder()
 
@@ -141,7 +141,7 @@ func TestLoginHandler_EndToEnd(t *testing.T) {
 
 	// First, register a user using the REAL registration flow (not manual creation)
 	// Phase 1: Generate AccountNumber
-	req1 := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer([]byte("{}")))
+	req1 := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer([]byte("{}")))
 	req1.Header.Set("Content-Type", "application/json")
 	rr1 := httptest.NewRecorder()
 
@@ -173,7 +173,7 @@ func TestLoginHandler_EndToEnd(t *testing.T) {
 	}
 
 	bodyBytes, _ := json.Marshal(phase2Body)
-	req2 := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer(bodyBytes))
+	req2 := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer(bodyBytes))
 	req2.Header.Set("Content-Type", "application/json")
 	rr2 := httptest.NewRecorder()
 
@@ -206,7 +206,7 @@ func TestLoginHandler_EndToEnd(t *testing.T) {
 	}
 
 	bodyBytes, _ = json.Marshal(loginBody)
-	req := httptest.NewRequest("POST", "/api/v1/login", bytes.NewBuffer(bodyBytes))
+	req := httptest.NewRequest("POST", "/api/v2/login", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
@@ -252,7 +252,7 @@ func TestTodoHandlers_EndToEnd(t *testing.T) {
 
 	// Register a user using the REAL registration flow (not manual creation)
 	// Phase 1: Generate AccountNumber
-	req1 := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer([]byte("{}")))
+	req1 := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer([]byte("{}")))
 	req1.Header.Set("Content-Type", "application/json")
 	rr1 := httptest.NewRecorder()
 
@@ -282,7 +282,7 @@ func TestTodoHandlers_EndToEnd(t *testing.T) {
 	}
 
 	bodyBytes, _ := json.Marshal(phase2Body)
-	req2 := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer(bodyBytes))
+	req2 := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer(bodyBytes))
 	req2.Header.Set("Content-Type", "application/json")
 	rr2 := httptest.NewRecorder()
 
@@ -328,7 +328,7 @@ func TestTodoHandlers_EndToEnd(t *testing.T) {
 	}
 
 	createBodyBytes, _ := json.Marshal(createBody)
-	createReq := httptest.NewRequest("POST", "/api/v1/todos", bytes.NewBuffer(createBodyBytes))
+	createReq := httptest.NewRequest("POST", "/api/v2/todos", bytes.NewBuffer(createBodyBytes))
 	createReq.Header.Set("Content-Type", "application/json")
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createRr := httptest.NewRecorder()
@@ -359,7 +359,7 @@ func TestTodoHandlers_EndToEnd(t *testing.T) {
 	}
 
 	// Test Get Todos
-	getReq := httptest.NewRequest("GET", "/api/v1/todos", nil)
+	getReq := httptest.NewRequest("GET", "/api/v2/todos", nil)
 	getReq.Header.Set("Authorization", "Bearer "+token)
 	getRr := httptest.NewRecorder()
 
@@ -388,12 +388,12 @@ func TestTodoHandlers_EndToEnd(t *testing.T) {
 
 	// Test Update Todo
 	updateBody := models.TodoRequest{
-		Title:    "Updated Todo",
+		Title:     "Updated Todo",
 		Completed: true,
 	}
 
 	bodyBytes, _ = json.Marshal(updateBody)
-	req3 := httptest.NewRequest("PUT", "/api/v1/todos/"+todoID, bytes.NewBuffer(bodyBytes))
+	req3 := httptest.NewRequest("PUT", "/api/v2/todos/"+todoID, bytes.NewBuffer(bodyBytes))
 	req3.Header.Set("Content-Type", "application/json")
 	req3.Header.Set("Authorization", "Bearer "+token)
 	rr3 := httptest.NewRecorder()
@@ -413,7 +413,7 @@ func TestTodoHandlers_EndToEnd(t *testing.T) {
 	}
 
 	// Test Delete Todo
-	req4 := httptest.NewRequest("DELETE", "/api/v1/todos/"+todoID, nil)
+	req4 := httptest.NewRequest("DELETE", "/api/v2/todos/"+todoID, nil)
 	req4.Header.Set("Authorization", "Bearer "+token)
 	rr4 := httptest.NewRecorder()
 

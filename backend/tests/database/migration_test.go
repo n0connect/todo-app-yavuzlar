@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"todo-app-backend/internal/database"
+	"todo-app-backend/internal/encryption"
 	"todo-app-backend/internal/models"
 	"todo-app-backend/tests/testutil"
 )
@@ -67,6 +68,11 @@ func TestUserTableSchema(t *testing.T) {
 	hasEncryptedKey := database.DB.Migrator().HasColumn(&models.User{}, "encrypted_key")
 	if !hasEncryptedKey {
 		t.Error("users table should have 'encrypted_key' column")
+	}
+
+	hasMasterKeyID := database.DB.Migrator().HasColumn(&models.User{}, "master_key_id")
+	if !hasMasterKeyID {
+		t.Error("users table should have 'master_key_id' column")
 	}
 
 	hasCreatedAt := database.DB.Migrator().HasColumn(&models.User{}, "created_at")
@@ -147,17 +153,11 @@ func TestUserTableIndexes(t *testing.T) {
 
 	database.Init()
 
-	// Check unique index on uuid using raw SQL (GORM HasIndex may not work correctly)
-	var uuidIndexCount int64
-	database.DB.Raw("SELECT count(*) FROM pg_indexes WHERE tablename = 'users' AND indexname = 'idx_users_uuid' AND schemaname = CURRENT_SCHEMA()").Scan(&uuidIndexCount)
-	if uuidIndexCount == 0 {
+	if !database.DB.Migrator().HasIndex(&models.User{}, "idx_users_uuid") {
 		t.Error("users table should have unique index 'idx_users_uuid' on 'uuid'")
 	}
 
-	// Check unique index on account_lookup
-	var accountLookupIndexCount int64
-	database.DB.Raw("SELECT count(*) FROM pg_indexes WHERE tablename = 'users' AND indexname = 'idx_users_account_lookup' AND schemaname = CURRENT_SCHEMA()").Scan(&accountLookupIndexCount)
-	if accountLookupIndexCount == 0 {
+	if !database.DB.Migrator().HasIndex(&models.User{}, "idx_users_account_lookup") {
 		t.Error("users table should have unique index 'idx_users_account_lookup' on 'account_lookup'")
 	}
 }
@@ -193,32 +193,40 @@ func TestDatabaseConstraints(t *testing.T) {
 	database.Init()
 
 	// Test NOT NULL constraint on account_lookup
-	// Use raw SQL to insert NULL value (GORM may convert empty string to empty string, not NULL)
-	var result int64
-	err := database.DB.Raw("INSERT INTO users (uuid, account_lookup, account_hash, encrypted_key, created_at, updated_at) VALUES (?, NULL, ?, ?, NOW(), NOW()) RETURNING id",
-		"test-uuid-123456789012", "test-hash", "test-key").Scan(&result).Error
+	accountLookupUUID := "test-uuid-123456789012"
+	err := database.DB.Model(&models.User{}).Create(map[string]interface{}{
+		"uuid":           accountLookupUUID,
+		"account_lookup": nil,
+		"account_hash":   "test-hash",
+		"encrypted_key":  "test-key",
+		"master_key_id":  "test-key-id",
+	}).Error
 	if err == nil {
 		t.Error("Creating user with NULL account_lookup should fail (NOT NULL constraint)")
-		// Clean up if somehow created
-		database.DB.Exec("DELETE FROM users WHERE id = ?", result)
+		database.DB.Where("uuid = ?", accountLookupUUID).Delete(&models.User{})
 	} else {
 		t.Logf("Expected error when creating user with NULL account_lookup: %v", err)
 	}
 
 	// Test NOT NULL constraint on account_hash
-	err = database.DB.Raw("INSERT INTO users (uuid, account_lookup, account_hash, encrypted_key, created_at, updated_at) VALUES (?, ?, NULL, ?, NOW(), NOW()) RETURNING id",
-		"test-uuid-987654321098", "test-lookup", "test-key").Scan(&result).Error
+	accountHashUUID := "test-uuid-987654321098"
+	err = database.DB.Model(&models.User{}).Create(map[string]interface{}{
+		"uuid":           accountHashUUID,
+		"account_lookup": "test-lookup",
+		"account_hash":   nil,
+		"encrypted_key":  "test-key",
+		"master_key_id":  "test-key-id",
+	}).Error
 	if err == nil {
 		t.Error("Creating user with NULL account_hash should fail (NOT NULL constraint)")
-		// Clean up if somehow created
-		database.DB.Exec("DELETE FROM users WHERE id = ?", result)
+		database.DB.Where("uuid = ?", accountHashUUID).Delete(&models.User{})
 	} else {
 		t.Logf("Expected error when creating user with NULL account_hash: %v", err)
 	}
 }
 
-// TestDatabaseEncryptionKey tests that encryption key is initialized
-func TestDatabaseEncryptionKey(t *testing.T) {
+// TestDatabaseMasterKey tests that master key is initialized
+func TestDatabaseMasterKey(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
 
@@ -227,13 +235,10 @@ func TestDatabaseEncryptionKey(t *testing.T) {
 
 	database.Init()
 
-	// Verify encryption key is set
-	if database.EncryptionKey == nil {
-		t.Fatal("database.EncryptionKey should not be nil after Init()")
+	if encryption.ActiveMasterKeyID() == "" {
+		t.Fatal("ActiveMasterKeyID should not be empty after Init()")
 	}
-
-	// Verify encryption key length (should be 32 bytes = 64 hex chars)
-	if len(database.EncryptionKey) != 32 {
-		t.Errorf("database.EncryptionKey length = %d, want 32", len(database.EncryptionKey))
+	if len(encryption.ActiveMasterKey()) != 32 {
+		t.Errorf("ActiveMasterKey length = %d, want 32", len(encryption.ActiveMasterKey()))
 	}
 }

@@ -3,37 +3,47 @@ package middleware
 import (
 	"net/http"
 	"strings"
+	"sync"
 
 	"todo-app-backend/internal/config"
 	"todo-app-backend/internal/utils"
 )
 
-var allowedOrigins map[string]struct{}
-var corsLogger = utils.NewLogger("CORS")
+var (
+	allowedOrigins map[string]struct{}
+	corsLogger     = utils.NewLogger("CORS")
+	corsOnce       sync.Once
+)
 
-func init() {
-	allowedOrigins = make(map[string]struct{})
+func loadAllowedOrigins() {
+	corsOnce.Do(func() {
+		allowedOrigins = make(map[string]struct{})
 
-	raw := config.GetEnv("ALLOWED_ORIGINS", "")
-	if raw == "" {
-		allowedOrigins["http://localhost"] = struct{}{}
-		allowedOrigins["http://127.0.0.1"] = struct{}{}
-		corsLogger.Info("CORS: default localhost whitelist enabled")
-		return
-	}
-
-	for _, o := range strings.Split(raw, ",") {
-		o = strings.TrimSpace(o)
-		if o == "" {
-			continue
+		raw := config.GetAllowedOrigins()
+		if raw == "" {
+			corsLogger.Warn("CORS: ALLOWED_ORIGINS not set; no origins will be allowed")
+			return
 		}
-		allowedOrigins[o] = struct{}{}
-	}
-	corsLogger.Info("CORS: whitelist enabled from ALLOWED_ORIGINS, count=%d", len(allowedOrigins))
+		if raw == "*" {
+			corsLogger.Warn("CORS: wildcard origins are not allowed; no origins will be allowed")
+			return
+		}
+
+		for _, o := range strings.Split(raw, ",") {
+			o = strings.TrimSpace(o)
+			if o == "" {
+				continue
+			}
+			allowedOrigins[o] = struct{}{}
+		}
+		corsLogger.Info("CORS: whitelist enabled from ALLOWED_ORIGINS, count=%d", len(allowedOrigins))
+	})
 }
 
 // isOriginAllowed checks if an origin is allowed, with flexible matching for localhost
 func isOriginAllowed(origin string) bool {
+	loadAllowedOrigins()
+
 	// Exact match first
 	if _, ok := allowedOrigins[origin]; ok {
 		return true
@@ -55,6 +65,7 @@ func isOriginAllowed(origin string) bool {
 
 func CORSMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		loadAllowedOrigins()
 		origin := r.Header.Get("Origin")
 		corsLogger.Debug("CORSMiddleware: method=%s path=%s origin=%s", r.Method, r.URL.Path, origin)
 

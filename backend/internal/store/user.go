@@ -20,7 +20,7 @@ type UserRepository interface {
 	Create(user *models.User) error
 	ExistsByUUID(uuid string) (bool, error)
 	ExistsByAccountLookup(lookup string) (bool, error)
-	GetEncryptedKey(uuid string) (string, error)
+	GetCryptoInfo(uuid string) (string, string, error)
 }
 
 // userRepository implements UserRepository
@@ -112,18 +112,18 @@ func (r *userRepository) ExistsByAccountLookup(lookup string) (bool, error) {
 }
 
 // GetEncryptedKey retrieves the encrypted key for a user
-func (r *userRepository) GetEncryptedKey(uuid string) (string, error) {
-	userRepoLogger.Debug("UserRepository.GetEncryptedKey: retrieving encrypted key for UUID: %s", uuid)
+func (r *userRepository) GetCryptoInfo(uuid string) (string, string, error) {
+	userRepoLogger.Debug("UserRepository.GetCryptoInfo: retrieving crypto info for UUID: %s", uuid)
 	user, err := r.FindByUUID(uuid)
 	if err != nil {
-		userRepoLogger.LogError("UserRepository.GetEncryptedKey", err)
-		userRepoLogger.Debug("UserRepository.GetEncryptedKey: user not found for UUID: %s", uuid)
-		return "", err
+		userRepoLogger.LogError("UserRepository.GetCryptoInfo", err)
+		userRepoLogger.Debug("UserRepository.GetCryptoInfo: user not found for UUID: %s", uuid)
+		return "", "", err
 	}
 	if user.EncryptedKey == "" {
-		userRepoLogger.Error("UserRepository.GetEncryptedKey: user has no encryption key: UUID=%s", uuid)
-		return "", fmt.Errorf("user has no encryption key")
+		userRepoLogger.Error("UserRepository.GetCryptoInfo: user has no encryption key: UUID=%s", uuid)
+		return "", "", fmt.Errorf("user has no encryption key")
 	}
-	userRepoLogger.Debug("UserRepository.GetEncryptedKey: successfully retrieved encrypted key for UUID: %s length=%d", uuid, len(user.EncryptedKey))
-	return user.EncryptedKey, nil
+	userRepoLogger.Debug("UserRepository.GetCryptoInfo: retrieved encrypted key for UUID: %s length=%d", uuid, len(user.EncryptedKey))
+	return user.EncryptedKey, user.MasterKeyID, nil
 }

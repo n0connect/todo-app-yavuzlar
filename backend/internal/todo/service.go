@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 
+	"todo-app-backend/internal/cryptoengine"
 	"todo-app-backend/internal/encryption"
 	"todo-app-backend/internal/models"
 	"todo-app-backend/internal/store"
@@ -39,19 +40,26 @@ func NewTodoService() *TodoService {
 	}
 }
 
+func (s *TodoService) getUserCrypto(userUUID string) ([]byte, error) {
+	encryptedKey, masterKeyID, err := s.userRepo.GetCryptoInfo(userUUID)
+	if err != nil {
+		s.logger.LogError("UserRepository.GetCryptoInfo", err)
+		return nil, err
+	}
+	userKey, err := encryption.DecryptUserKey(encryptedKey, masterKeyID)
+	if err != nil {
+		s.logger.LogError("DecryptUserKey", err)
+		return nil, err
+	}
+	return userKey, nil
+}
+
 // GetTodos retrieves all todos for a user
 func (s *TodoService) GetTodos(userUUIDStr string) ([]TodoDTO, error) {
 	s.logger.Debug("GetTodos: starting for user: %s", userUUIDStr)
 
-	// Get user encryption key via repository
-	encryptedKey, err := s.userRepo.GetEncryptedKey(userUUIDStr)
+	userKey, err := s.getUserCrypto(userUUIDStr)
 	if err != nil {
-		s.logger.LogError("UserRepository.GetEncryptedKey", err)
-		return nil, err
-	}
-	userKey, err := encryption.DecryptUserKey(encryptedKey)
-	if err != nil {
-		s.logger.LogError("DecryptUserKey", err)
 		return nil, err
 	}
 
@@ -121,20 +129,17 @@ func (s *TodoService) CreateTodo(userUUIDStr string, req models.TodoRequest) (*T
 		return nil, err
 	}
 
-	// Get user encryption key via repository
-	encryptedKey, err := s.userRepo.GetEncryptedKey(userUUIDStr)
+	userKey, err := s.getUserCrypto(userUUIDStr)
 	if err != nil {
-		s.logger.LogError("UserRepository.GetEncryptedKey", err)
-		return nil, err
-	}
-	userKey, err := encryption.DecryptUserKey(encryptedKey)
-	if err != nil {
-		s.logger.LogError("DecryptUserKey", err)
 		return nil, err
 	}
 
 	// Generate todo ID BEFORE encryption (required for AAD)
-	todoID := uuid.New()
+	todoID, err := uuid.NewRandomFromReader(cryptoengine.RandReader)
+	if err != nil {
+		s.logger.LogError("UUID Generate", err)
+		return nil, err
+	}
 
 	// Encrypt title with binary AAD
 	aad := encryption.BuildAAD(userUUIDStr, todoID, encryption.FieldTitle, encryption.PurposeStoredRecord)
@@ -172,13 +177,19 @@ func (s *TodoService) CreateTodo(userUUIDStr string, req models.TodoRequest) (*T
 		}
 	}
 
-	// Validate tags (max 10 tags, each max 6 alphanumeric chars) and encrypt
-	// SECURITY: Whitelist validation - only A-Z, a-z, 0-9, max 6 characters
+	maxTags, err := utils.GetMaxTagsPerTodo()
+	if err != nil {
+		s.logger.LogError("GetMaxTagsPerTodo", err)
+		return nil, err
+	}
+
+	// Validate tags (config-driven) and encrypt
+	// SECURITY: Whitelist validation - only A-Z, a-z, 0-9
 	var encryptedTags pq.StringArray
 	var plainTags []string
 	tagAAD := encryption.BuildAAD(userUUIDStr, todoID, encryption.FieldTags, encryption.PurposeStoredRecord)
 	for i, tag := range req.Tags {
-		if i >= 10 {
+		if i >= maxTags {
 			break
 		}
 
@@ -246,15 +257,8 @@ func (s *TodoService) UpdateTodo(userUUIDStr string, todoIDStr string, req model
 		return nil, err
 	}
 
-	// Get user encryption key via repository
-	encryptedKey, err := s.userRepo.GetEncryptedKey(userUUIDStr)
+	userKey, err := s.getUserCrypto(userUUIDStr)
 	if err != nil {
-		s.logger.LogError("UserRepository.GetEncryptedKey", err)
-		return nil, err
-	}
-	userKey, err := encryption.DecryptUserKey(encryptedKey)
-	if err != nil {
-		s.logger.LogError("DecryptUserKey", err)
 		return nil, err
 	}
 
@@ -295,12 +299,17 @@ func (s *TodoService) UpdateTodo(userUUIDStr string, todoIDStr string, req model
 	var responseTags []string
 
 	// Update tags if provided - encrypt each tag
-	// SECURITY: Whitelist validation - only A-Z, a-z, 0-9, max 6 characters
+	// SECURITY: Whitelist validation - only A-Z, a-z, 0-9
 	if req.Tags != nil {
+		maxTags, err := utils.GetMaxTagsPerTodo()
+		if err != nil {
+			s.logger.LogError("GetMaxTagsPerTodo", err)
+			return nil, err
+		}
 		var encryptedTags pq.StringArray
 		tagAAD := encryption.BuildAAD(userUUIDStr, todoID, encryption.FieldTags, encryption.PurposeStoredRecord)
 		for i, tag := range req.Tags {
-			if i >= 10 {
+			if i >= maxTags {
 				break
 			}
 

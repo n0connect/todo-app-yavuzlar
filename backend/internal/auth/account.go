@@ -1,30 +1,52 @@
 package auth
 
 import (
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"todo-app-backend/internal/config"
+	"todo-app-backend/internal/cryptoengine"
 	"todo-app-backend/internal/utils"
-
-	"golang.org/x/crypto/argon2"
 )
 
 var accountLogger = utils.NewLogger("ACCOUNT")
 
-const (
-	// Argon2id parameters
-	argon2Memory      = 64 * 1024 // 64 MB
-	argon2Time        = 3
-	argon2Parallelism = 2
-	argon2SaltLength  = 16
-	argon2KeyLength   = 32
+type argon2Params struct {
+	memoryKiB  uint32
+	time       uint32
+	parallel   uint32
+	saltLength uint32
+	hashLength uint32
+}
+
+var (
+	dummyHashOnce sync.Once
+	dummyHash     string
+	dummyHashErr  error
 )
+
+func getArgon2Params() (argon2Params, error) {
+	memory := config.GetArgon2MemoryKiB()
+	timeCost := config.GetArgon2Time()
+	parallel := config.GetArgon2Parallelism()
+	saltLen := config.GetArgon2SaltLength()
+	hashLen := config.GetArgon2HashLength()
+
+	if memory <= 0 || timeCost <= 0 || parallel <= 0 || saltLen <= 0 || hashLen <= 0 {
+		return argon2Params{}, fmt.Errorf("argon2 parameters not configured")
+	}
+
+	return argon2Params{
+		memoryKiB:  uint32(memory),
+		time:       uint32(timeCost),
+		parallel:   uint32(parallel),
+		saltLength: uint32(saltLen),
+		hashLength: uint32(hashLen),
+	}, nil
+}
 
 // ComputeAccountLookup computes HMAC-SHA256(pepper, accountNumber) for fast database lookup
 // Returns hex-encoded string
@@ -33,33 +55,45 @@ func ComputeAccountLookup(accountNumber string) (string, error) {
 	if len(pepper) == 0 {
 		return "", errors.New("ACCOUNT_LOOKUP_PEPPER not configured")
 	}
-
-	mac := hmac.New(sha256.New, pepper)
-	mac.Write([]byte(accountNumber))
-	lookup := hex.EncodeToString(mac.Sum(nil))
+	if len(pepper) < 32 {
+		return "", errors.New("ACCOUNT_LOOKUP_PEPPER too short")
+	}
+	mac, err := cryptoengine.HMACSHA256(pepper, []byte(accountNumber))
+	if err != nil {
+		return "", err
+	}
+	lookup := hex.EncodeToString(mac)
 
 	accountLogger.Debug("ComputeAccountLookup: computed lookup for account number (masked)")
 	return lookup, nil
 }
 
-// HashAccountNumber hashes account number using Argon id
+// HashAccountNumber hashes account number using Argon2id
 // Returns encoded hash string with parameters
 func HashAccountNumber(accountNumber string) (string, error) {
+	params, err := getArgon2Params()
+	if err != nil {
+		return "", err
+	}
+
 	// Generate random salt
-	salt := make([]byte, argon2SaltLength)
-	if _, err := rand.Read(salt); err != nil {
+	salt, err := cryptoengine.RandomBytes(int(params.saltLength))
+	if err != nil {
 		return "", fmt.Errorf("failed to generate salt: %w", err)
 	}
 
 	// Hash with Argon2id
-	hash := argon2.IDKey([]byte(accountNumber), salt, argon2Time, argon2Memory, argon2Parallelism, argon2KeyLength)
+	hash, err := cryptoengine.Argon2idKey([]byte(accountNumber), salt, params.time, params.memoryKiB, params.parallel, params.hashLength)
+	if err != nil {
+		return "", fmt.Errorf("argon2id failed: %w", err)
+	}
 
 	// Encode: format = "argon2id$m=memory$t=time$p=parallelism$salt$hash"
 	// Using hex encoding for both salt and hash
 	encoded := fmt.Sprintf("argon2id$m=%d$t=%d$p=%d$%s$%s",
-		argon2Memory,
-		argon2Time,
-		argon2Parallelism,
+		params.memoryKiB,
+		params.time,
+		params.parallel,
 		hex.EncodeToString(salt),
 		hex.EncodeToString(hash))
 
@@ -117,10 +151,13 @@ func VerifyAccountNumberHash(encodedHash, accountNumber string) error {
 	}
 
 	// Compute hash with same parameters
-	computedHash := argon2.IDKey([]byte(accountNumber), salt, time, memory, uint8(parallelism), uint32(len(expectedHash)))
+	computedHash, err := cryptoengine.Argon2idKey([]byte(accountNumber), salt, time, memory, parallelism, uint32(len(expectedHash)))
+	if err != nil {
+		return fmt.Errorf("argon2id failed: %w", err)
+	}
 
 	// Constant-time comparison
-	if !hmac.Equal(computedHash, expectedHash) {
+	if !cryptoengine.ConstantTimeEqual(computedHash, expectedHash) {
 		return errors.New("account number hash mismatch")
 	}
 
@@ -128,14 +165,43 @@ func VerifyAccountNumberHash(encodedHash, accountNumber string) error {
 	return nil
 }
 
+func getDummyHash() (string, error) {
+	dummyHashOnce.Do(func() {
+		params, err := getArgon2Params()
+		if err != nil {
+			dummyHashErr = err
+			return
+		}
+		salt, err := cryptoengine.RandomBytes(int(params.saltLength))
+		if err != nil {
+			dummyHashErr = err
+			return
+		}
+		hash, err := cryptoengine.Argon2idKey([]byte("dummy-account"), salt, params.time, params.memoryKiB, params.parallel, params.hashLength)
+		if err != nil {
+			dummyHashErr = err
+			return
+		}
+		dummyHash = fmt.Sprintf("argon2id$m=%d$t=%d$p=%d$%s$%s",
+			params.memoryKiB,
+			params.time,
+			params.parallel,
+			hex.EncodeToString(salt),
+			hex.EncodeToString(hash))
+	})
+	return dummyHash, dummyHashErr
+}
+
 // PerformDummyHashVerification performs a dummy Argon2id hash verification
 // to prevent timing attacks by making all login attempts take similar time
 // regardless of whether the user exists or not
 // This is exported so handlers can use it for timing attack prevention
 func PerformDummyHashVerification(accountNumber string) {
-	// Use a dummy hash with same format as real hashes
-	// This ensures constant-time operation similar to real verification
-	dummyHash := "$argon2id$v=19$m=67108864,t=3,p=2$dummysalt123456$dummyhash123456789012345678901234567890"
+	dummyHash, err := getDummyHash()
+	if err != nil {
+		accountLogger.LogError("PerformDummyHashVerification", err)
+		return
+	}
 	_ = VerifyAccountNumberHash(dummyHash, accountNumber)
 	// Ignore error - this is just for timing protection
 }

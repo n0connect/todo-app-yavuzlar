@@ -33,7 +33,7 @@ func TestRegisterHandler_InvalidPendingToken(t *testing.T) {
 	}
 
 	bodyBytes, _ := json.Marshal(phase2Body)
-	req := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer(bodyBytes))
+	req := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
@@ -64,7 +64,7 @@ func TestRegisterHandler_ExpiredPendingToken(t *testing.T) {
 	defer testutil.CleanupTestData(t)
 
 	// Phase 1: Generate AccountNumber
-	req1 := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer([]byte("{}")))
+	req1 := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer([]byte("{}")))
 	req1.Header.Set("Content-Type", "application/json")
 	rr1 := httptest.NewRecorder()
 
@@ -88,7 +88,7 @@ func TestRegisterHandler_ExpiredPendingToken(t *testing.T) {
 	}
 
 	bodyBytes, _ := json.Marshal(phase2Body)
-	req2 := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer(bodyBytes))
+	req2 := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer(bodyBytes))
 	req2.Header.Set("Content-Type", "application/json")
 	rr2 := httptest.NewRecorder()
 
@@ -109,7 +109,7 @@ func TestRegisterHandler_ExpiredPendingToken(t *testing.T) {
 	// Second use - should fail (one-time use)
 	// Create a new request with the same body (HTTP request body can only be read once)
 	bodyBytes2, _ := json.Marshal(phase2Body)
-	req3 := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer(bodyBytes2))
+	req3 := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer(bodyBytes2))
 	req3.Header.Set("Content-Type", "application/json")
 	rr3 := httptest.NewRecorder()
 	handler2.ServeHTTP(rr3, req3)
@@ -140,7 +140,7 @@ func TestLoginHandler_NonexistentUser(t *testing.T) {
 	}
 
 	bodyBytes, _ := json.Marshal(loginBody)
-	req := httptest.NewRequest("POST", "/api/v1/login", bytes.NewBuffer(bodyBytes))
+	req := httptest.NewRequest("POST", "/api/v2/login", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
@@ -185,7 +185,7 @@ func TestTodoHandler_Unauthorized(t *testing.T) {
 	}
 
 	bodyBytes, _ := json.Marshal(createBody)
-	req := httptest.NewRequest("POST", "/api/v1/todos", bytes.NewBuffer(bodyBytes))
+	req := httptest.NewRequest("POST", "/api/v2/todos", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	// No Authorization header
 	rr := httptest.NewRecorder()
@@ -221,7 +221,7 @@ func TestTodoHandler_InvalidToken(t *testing.T) {
 	}
 
 	bodyBytes, _ := json.Marshal(createBody)
-	req := httptest.NewRequest("POST", "/api/v1/todos", bytes.NewBuffer(bodyBytes))
+	req := httptest.NewRequest("POST", "/api/v2/todos", bytes.NewBuffer(bodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer invalid-token-12345")
 	rr := httptest.NewRecorder()
@@ -255,7 +255,7 @@ func TestTodoHandler_NotFound(t *testing.T) {
 
 	// Register a user using the REAL registration flow (not manual creation)
 	// Phase 1: Generate AccountNumber
-	req1 := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer([]byte("{}")))
+	req1 := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer([]byte("{}")))
 	req1.Header.Set("Content-Type", "application/json")
 	rr1 := httptest.NewRecorder()
 
@@ -285,7 +285,7 @@ func TestTodoHandler_NotFound(t *testing.T) {
 	}
 
 	bodyBytes, _ := json.Marshal(phase2Body)
-	req2 := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBuffer(bodyBytes))
+	req2 := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBuffer(bodyBytes))
 	req2.Header.Set("Content-Type", "application/json")
 	rr2 := httptest.NewRecorder()
 
@@ -329,7 +329,7 @@ func TestTodoHandler_NotFound(t *testing.T) {
 	}
 
 	updateBodyBytes, _ := json.Marshal(updateBody)
-	req := httptest.NewRequest("PUT", "/api/v1/todos/00000000-0000-0000-0000-000000000000", bytes.NewBuffer(updateBodyBytes))
+	req := httptest.NewRequest("PUT", "/api/v2/todos/00000000-0000-0000-0000-000000000000", bytes.NewBuffer(updateBodyBytes))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 	rr := httptest.NewRecorder()

@@ -9,6 +9,7 @@ import "time"
 // SECURITY: This function is ONLY available in test builds (build tag: test)
 // It will NOT be compiled into production binaries, preventing security risks
 func ResetRateLimiterForTesting() {
+	_ = globalRateLimiter.loadConfig()
 	globalRateLimiter.mu.Lock()
 	defer globalRateLimiter.mu.Unlock()
 	globalRateLimiter.buckets = make(map[string]*TokenBucket)

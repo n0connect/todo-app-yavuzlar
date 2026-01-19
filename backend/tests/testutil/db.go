@@ -131,7 +131,7 @@ func InitializeTestDatabase(t *testing.T) {
 	// Setup test environment
 	SetupTestEnv(t)
 
-	// Initialize database (this sets database.DB and database.EncryptionKey)
+	// Initialize database (this sets database.DB)
 	database.Init()
 
 	// Reset global state for test isolation
@@ -166,12 +166,12 @@ func CleanupTestData(t *testing.T) {
 	}
 
 	// Delete all todos first (foreign key constraint)
-	if err := database.DB.Exec("DELETE FROM todos").Error; err != nil {
+	if err := database.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.Todo{}).Error; err != nil {
 		t.Logf("Failed to cleanup todos: %v", err)
 	}
 
 	// Delete all users
-	if err := database.DB.Exec("DELETE FROM users").Error; err != nil {
+	if err := database.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&models.User{}).Error; err != nil {
 		t.Logf("Failed to cleanup users: %v", err)
 	}
 }
@@ -185,12 +185,12 @@ func CleanupTestUser(t *testing.T, userUUID string) {
 	}
 
 	// Delete user's todos first
-	if err := database.DB.Exec("DELETE FROM todos WHERE user_uuid = ?", userUUID).Error; err != nil {
+	if err := database.DB.Where("user_uuid = ?", userUUID).Delete(&models.Todo{}).Error; err != nil {
 		t.Logf("Failed to cleanup todos for user %s: %v", userUUID, err)
 	}
 
 	// Delete user
-	if err := database.DB.Exec("DELETE FROM users WHERE uuid = ?", userUUID).Error; err != nil {
+	if err := database.DB.Where("uuid = ?", userUUID).Delete(&models.User{}).Error; err != nil {
 		t.Logf("Failed to cleanup user %s: %v", userUUID, err)
 	}
 }

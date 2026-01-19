@@ -5,6 +5,15 @@ echo "Todo App Setup"
 echo "=============="
 
 ENV_FILE=".env"
+INTERACTIVE=1
+
+for arg in "$@"; do
+  case "$arg" in
+    --non-interactive)
+      INTERACTIVE=0
+      ;;
+  esac
+done
 
 # Dependency check function
 check_dependency() {
@@ -44,6 +53,30 @@ check_dependency() {
   fi
 }
 
+require_openssl_version() {
+  local min_major=3
+  local min_minor=2
+  local min_patch=0
+  local version_raw
+  version_raw="$(openssl version 2>/dev/null | awk '{print $2}')"
+  if [[ -z "$version_raw" ]] || [[ "$version_raw" == LibreSSL* ]]; then
+    echo "❌ ERROR: OpenSSL >= 3.2.0 is required (LibreSSL is not supported)." >&2
+    exit 1
+  fi
+  local version="${version_raw%%[!0-9.]*}"
+  local major minor patch
+  IFS='.' read -r major minor patch <<<"$version"
+  major="${major:-0}"
+  minor="${minor:-0}"
+  patch="${patch:-0}"
+  if (( major < min_major || (major == min_major && minor < min_minor) || (major == min_major && minor == min_minor && patch < min_patch) )); then
+    echo "❌ ERROR: OpenSSL >= 3.2.0 is required (found $version_raw)." >&2
+    echo "💡 macOS: brew install openssl@3 and ensure PATH points to it." >&2
+    echo "💡 Linux: install OpenSSL 3.2.x from your distro or source." >&2
+    exit 1
+  fi
+}
+
 # Check required dependencies
 echo ""
 echo "🔍 Checking dependencies..."
@@ -51,6 +84,7 @@ echo "============================"
 
 check_dependency openssl "OpenSSL" true \
   "macOS: Usually pre-installed\n   Linux: sudo apt-get install openssl (Debian/Ubuntu) or sudo yum install openssl (RHEL/CentOS)\n   Or visit: https://www.openssl.org/source/"
+require_openssl_version
 
 # Check optional dependencies (informational)
 check_dependency docker "Docker" false \
@@ -102,19 +136,51 @@ upsert_env() {
   printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
 }
 
+apply_default() {
+  local key="$1"
+  local value="$2"
+  if [[ -z "${!key:-}" ]]; then
+    echo "Setting default $key=$value"
+    export "$key"="$value"
+    upsert_env "$key" "$value"
+  fi
+}
+
 require_cmd openssl
 
-# Generate/load ENCRYPTION_KEY
-if [[ -z "${ENCRYPTION_KEY:-}" ]]; then
-  echo "Generating ENCRYPTION_KEY..."
-  ENCRYPTION_KEY="$(openssl rand -hex 32)"
-fi
-upsert_env "ENCRYPTION_KEY" "$ENCRYPTION_KEY"
+prompt_input() {
+  local prompt="$1"
+  local silent="${2:-0}"
+  local value
+  if [ -r /dev/tty ] && [ -w /dev/tty ]; then
+    if [ "$silent" -eq 1 ]; then
+      read -r -s -p "$prompt" value < /dev/tty
+      echo "" > /dev/tty
+    else
+      read -r -p "$prompt" value < /dev/tty
+    fi
+  else
+    if [ "$silent" -eq 1 ]; then
+      read -r -s -p "$prompt" value
+      echo ""
+    else
+      read -r -p "$prompt" value
+    fi
+  fi
+  printf '%s' "$value"
+}
 
-# Generate/load JWT_SECRET
+# Generate/load JWT_SECRET (honor JWT_SECRET_MIN_LEN if set)
 if [[ -z "${JWT_SECRET:-}" ]]; then
-  echo "Generating JWT_SECRET..."
-  JWT_SECRET="$(openssl rand -hex 32)"
+  jwt_min_len="${JWT_SECRET_MIN_LEN:-}"
+  if [[ "$jwt_min_len" =~ ^[0-9]+$ ]] && [ "$jwt_min_len" -gt 0 ]; then
+    echo "Generating JWT_SECRET (min length: $jwt_min_len)..."
+    jwt_bytes=$(( (jwt_min_len + 1) / 2 ))
+    JWT_SECRET="$(openssl rand -hex "$jwt_bytes")"
+  else
+    echo "Generating JWT_SECRET..."
+    JWT_SECRET="$(openssl rand -hex 32)"
+  fi
 fi
 upsert_env "JWT_SECRET" "$JWT_SECRET"
 
@@ -125,24 +191,163 @@ if [[ -z "${ACCOUNT_LOOKUP_PEPPER:-}" ]]; then
 fi
 upsert_env "ACCOUNT_LOOKUP_PEPPER" "$ACCOUNT_LOOKUP_PEPPER"
 
-# Defaults
-JWT_EXPIRATION_MINUTES="${JWT_EXPIRATION_MINUTES:-15}"
-ALLOWED_ORIGIN="${ALLOWED_ORIGIN:-*}"
-APP_ENV="${APP_ENV:-development}"
-LOG_LEVEL="${LOG_LEVEL:-debug}"
+# Generate/load MASTER_KEY_ACTIVE
+if [[ -z "${MASTER_KEY_ACTIVE:-}" ]]; then
+  echo "Generating MASTER_KEY_ACTIVE..."
+  MASTER_KEY_ACTIVE="$(openssl rand -hex 32)"
+fi
+upsert_env "MASTER_KEY_ACTIVE" "$MASTER_KEY_ACTIVE"
 
-upsert_env "JWT_EXPIRATION_MINUTES" "$JWT_EXPIRATION_MINUTES"
-upsert_env "ALLOWED_ORIGIN" "$ALLOWED_ORIGIN"
-upsert_env "APP_ENV" "$APP_ENV"
-upsert_env "LOG_LEVEL" "$LOG_LEVEL"
+# Generate/load MASTER_KEY_ACTIVE_ID
+if [[ -z "${MASTER_KEY_ACTIVE_ID:-}" ]]; then
+  echo "Generating MASTER_KEY_ACTIVE_ID..."
+  MASTER_KEY_ACTIVE_ID="$(openssl rand -hex 4)"
+fi
+upsert_env "MASTER_KEY_ACTIVE_ID" "$MASTER_KEY_ACTIVE_ID"
+
+# Apply default non-secret config values (override in .env as needed)
+apply_default "JWT_SECRET_MIN_LEN" "32"
+apply_default "JWT_ISSUER" "todo-app-backend"
+apply_default "JWT_AUDIENCE" "todo-app-frontend"
+apply_default "JWT_EXPIRATION_MINUTES" "15"
+apply_default "ALLOWED_ORIGINS" "http://localhost"
+apply_default "APP_ENV" "development"
+apply_default "LOG_LEVEL" "info"
+apply_default "DB_HOST" "localhost"
+apply_default "DB_PORT" "5432"
+apply_default "DB_USER" "postgres"
+apply_default "DB_PASSWORD" "postgres"
+apply_default "DB_NAME" "todo_app"
+apply_default "DB_SSL_MODE" "disable"
+apply_default "BACKEND_PORT" "8080"
+apply_default "MAX_BASE64_LOGIN_LEN" "4096"
+apply_default "MAX_BASE64_TODO_LEN" "65536"
+apply_default "MAX_REQUEST_BODY_BYTES" "1048576"
+apply_default "MAX_JSON_DEPTH" "2"
+apply_default "MAX_TITLE_LENGTH" "1000"
+apply_default "MIN_TITLE_LENGTH" "1"
+apply_default "MAX_TAG_LENGTH" "6"
+apply_default "MAX_TAGS_PER_TODO" "10"
+apply_default "ARGON2_MEMORY_KIB" "65536"
+apply_default "ARGON2_TIME" "3"
+apply_default "ARGON2_PARALLELISM" "2"
+apply_default "ARGON2_SALT_LENGTH" "16"
+apply_default "ARGON2_HASH_LENGTH" "32"
+apply_default "PENDING_TOKEN_TTL_SEC" "300"
+apply_default "PENDING_CLEANUP_INTERVAL_SEC" "60"
+apply_default "PENDING_ID_BYTES" "16"
+apply_default "INTERNAL_ID_LENGTH" "24"
+apply_default "RATE_LIMIT_MAX_TOKENS" "20"
+apply_default "RATE_LIMIT_REFILL_INTERVAL_SEC" "3"
+apply_default "RATE_LIMIT_CLEANUP_INTERVAL_SEC" "300"
+apply_default "RATE_LIMIT_MAX_BUCKETS" "10000"
+apply_default "SERVER_READ_HEADER_TIMEOUT_SEC" "5"
+apply_default "SERVER_READ_TIMEOUT_SEC" "15"
+apply_default "SERVER_WRITE_TIMEOUT_SEC" "15"
+apply_default "SERVER_IDLE_TIMEOUT_SEC" "60"
+apply_default "SERVER_MAX_HEADER_BYTES" "8192"
+
+required_vars=(
+  "JWT_SECRET_MIN_LEN"
+  "JWT_ISSUER"
+  "JWT_AUDIENCE"
+  "JWT_EXPIRATION_MINUTES"
+  "ALLOWED_ORIGINS"
+  "APP_ENV"
+  "LOG_LEVEL"
+  "DB_HOST"
+  "DB_PORT"
+  "DB_USER"
+  "DB_PASSWORD"
+  "DB_NAME"
+  "DB_SSL_MODE"
+  "BACKEND_PORT"
+  "MAX_BASE64_LOGIN_LEN"
+  "MAX_BASE64_TODO_LEN"
+  "MAX_REQUEST_BODY_BYTES"
+  "MAX_JSON_DEPTH"
+  "MAX_TITLE_LENGTH"
+  "MIN_TITLE_LENGTH"
+  "MAX_TAG_LENGTH"
+  "MAX_TAGS_PER_TODO"
+  "ARGON2_MEMORY_KIB"
+  "ARGON2_TIME"
+  "ARGON2_PARALLELISM"
+  "ARGON2_SALT_LENGTH"
+  "ARGON2_HASH_LENGTH"
+  "PENDING_TOKEN_TTL_SEC"
+  "PENDING_CLEANUP_INTERVAL_SEC"
+  "PENDING_ID_BYTES"
+  "INTERNAL_ID_LENGTH"
+  "RATE_LIMIT_MAX_TOKENS"
+  "RATE_LIMIT_REFILL_INTERVAL_SEC"
+  "RATE_LIMIT_CLEANUP_INTERVAL_SEC"
+  "RATE_LIMIT_MAX_BUCKETS"
+  "SERVER_READ_HEADER_TIMEOUT_SEC"
+  "SERVER_READ_TIMEOUT_SEC"
+  "SERVER_WRITE_TIMEOUT_SEC"
+  "SERVER_IDLE_TIMEOUT_SEC"
+  "SERVER_MAX_HEADER_BYTES"
+)
+
+missing=()
+for var in "${required_vars[@]}"; do
+  if [[ -z "${!var:-}" ]]; then
+    missing+=("$var")
+  else
+    upsert_env "$var" "${!var}"
+  fi
+done
+
+if [ ${#missing[@]} -gt 0 ]; then
+  if [ "$INTERACTIVE" -eq 1 ]; then
+    echo ""
+    echo "Missing required configuration values. Please enter them now:"
+    still_missing=()
+    for var in "${missing[@]}"; do
+      if [[ "$var" == *"PASSWORD"* ]]; then
+        value="$(prompt_input "Enter value for $var: " 1)"
+      else
+        value="$(prompt_input "Enter value for $var: " 0)"
+      fi
+      if [[ -n "$value" ]]; then
+        upsert_env "$var" "$value"
+        export "$var"="$value"
+      else
+        still_missing+=("$var")
+      fi
+    done
+    missing=("${still_missing[@]}")
+  fi
+fi
+
+if [ ${#missing[@]} -gt 0 ]; then
+  echo ""
+  echo "❌ Missing required configuration values (set them in .env before continuing):" >&2
+  for var in "${missing[@]}"; do
+    echo "   - $var" >&2
+  done
+  exit 1
+fi
+
+if [[ "${JWT_SECRET_MIN_LEN:-}" =~ ^[0-9]+$ ]] && [ "$JWT_SECRET_MIN_LEN" -gt 0 ]; then
+  if [ ${#JWT_SECRET} -lt "$JWT_SECRET_MIN_LEN" ]; then
+    echo "JWT_SECRET is shorter than JWT_SECRET_MIN_LEN; regenerating..."
+    jwt_bytes=$(( (JWT_SECRET_MIN_LEN + 1) / 2 ))
+    JWT_SECRET="$(openssl rand -hex "$jwt_bytes")"
+    upsert_env "JWT_SECRET" "$JWT_SECRET"
+  fi
+fi
 
 echo ""
 echo "Configuration:"
 echo "  JWT_EXPIRATION_MINUTES: $JWT_EXPIRATION_MINUTES"
-echo "  ALLOWED_ORIGIN: $ALLOWED_ORIGIN"
+echo "  ALLOWED_ORIGINS: $ALLOWED_ORIGINS"
 echo "  APP_ENV: $APP_ENV"
 echo "  LOG_LEVEL: $LOG_LEVEL"
 echo "  ACCOUNT_LOOKUP_PEPPER: [generated]"
+echo "  MASTER_KEY_ACTIVE: [generated]"
+echo "  MASTER_KEY_ACTIVE_ID: $MASTER_KEY_ACTIVE_ID"
 echo ""
 echo "⚠️  IMPORTANT: Keep your .env file secure and do not commit it to version control!"
 echo ""

@@ -6,26 +6,34 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"todo-app-backend/internal/config"
 )
 
-const (
-	// MaxRequestBodySize limits request body size to prevent DoS attacks
-	// 1 MB should be sufficient for all API endpoints
-	MaxRequestBodySize = 1 << 20 // 1 MB
+func maxRequestBodyBytes() (int, error) {
+	maxBytes := config.GetMaxRequestBodyBytes()
+	if maxBytes <= 0 {
+		return 0, fmt.Errorf("MAX_REQUEST_BODY_BYTES not configured")
+	}
+	return maxBytes, nil
+}
 
-	// MaxJSONDepth limits the maximum nesting depth of JSON objects/arrays
-	// Analysis of current endpoints:
-	//   - LoginRequest: depth 1
-	//   - RegisterRequest: depth 1
-	//   - TodoRequest: depth 2 (Tags array)
-	// Maximum actual depth: 2
-	// Security limit: 2 (matches actual usage, strict security - no buffer for unnecessary nesting)
-	MaxJSONDepth = 2
-)
+func maxJSONDepth() (int, error) {
+	maxDepth := config.GetMaxJSONDepth()
+	if maxDepth <= 0 {
+		return 0, fmt.Errorf("MAX_JSON_DEPTH not configured")
+	}
+	return maxDepth, nil
+}
 
 // CheckJSONDepth checks the maximum nesting depth of a JSON document
 // Returns the maximum depth and any error encountered
 func CheckJSONDepth(data []byte) (int, error) {
+	maxDepthLimit, err := maxJSONDepth()
+	if err != nil {
+		return 0, err
+	}
+
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	depth := 0
 	maxDepth := 0
@@ -46,8 +54,8 @@ func CheckJSONDepth(data []byte) (int, error) {
 			if depth > maxDepth {
 				maxDepth = depth
 			}
-			if depth > MaxJSONDepth {
-				return maxDepth, fmt.Errorf("JSON nesting depth exceeds maximum (%d levels)", MaxJSONDepth)
+			if depth > maxDepthLimit {
+				return maxDepth, fmt.Errorf("JSON nesting depth exceeds maximum (%d levels)", maxDepthLimit)
 			}
 		case json.Delim('}'), json.Delim(']'):
 			depth--
@@ -63,8 +71,13 @@ func CheckJSONDepth(data []byte) (int, error) {
 // DecodeJSONRequest decodes a JSON request body into the provided struct
 // SECURITY: Limits request body size and nesting depth to prevent DoS attacks
 func DecodeJSONRequest(r *http.Request, v interface{}) error {
+	maxBytes, err := maxRequestBodyBytes()
+	if err != nil {
+		return err
+	}
+
 	// Limit request body size to prevent memory exhaustion DoS
-	limitedReader := io.LimitReader(r.Body, MaxRequestBodySize)
+	limitedReader := io.LimitReader(r.Body, int64(maxBytes))
 
 	// Read entire body to check depth (we need to read it anyway for decoding)
 	bodyBytes, err := io.ReadAll(limitedReader)
@@ -73,8 +86,8 @@ func DecodeJSONRequest(r *http.Request, v interface{}) error {
 	}
 
 	// Check if body exceeds size limit
-	if len(bodyBytes) >= MaxRequestBodySize {
-		return fmt.Errorf("request body too large (max %d bytes)", MaxRequestBodySize)
+	if len(bodyBytes) >= maxBytes {
+		return fmt.Errorf("request body too large (max %d bytes)", maxBytes)
 	}
 
 	// Check JSON depth before decoding
@@ -103,7 +116,10 @@ func EncodeJSONResponse(w http.ResponseWriter, data interface{}, statusCode int)
 // WriteAPIError writes a generic error message to the user while logging detailed information
 // SECURITY: publicMsg is shown to users (must be generic), internalErr is only logged
 // This prevents information leakage while maintaining detailed logs for debugging
-func WriteAPIError(w http.ResponseWriter, statusCode int, publicMsg string, logger interface{ LogError(string, error); Warn(string, ...interface{}) }, internalErr error, logContext string) {
+func WriteAPIError(w http.ResponseWriter, statusCode int, publicMsg string, logger interface {
+	LogError(string, error)
+	Warn(string, ...interface{})
+}, internalErr error, logContext string) {
 	// Log detailed error information (for debugging/auditing)
 	if logger != nil && internalErr != nil {
 		logger.LogError(logContext, internalErr)

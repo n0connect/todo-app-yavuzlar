@@ -89,6 +89,17 @@ check_docker_compose() {
   fi
 }
 
+# Helper: read variable from .env without sourcing it
+get_env_var_from_file() {
+  local var_name="$1"
+  local env_file=".env"
+  grep -E "^[[:space:]]*${var_name}[[:space:]]*=" "$env_file" | \
+    sed -n "s/^[[:space:]]*${var_name}[[:space:]]*=[[:space:]]*//p" | \
+    sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" | \
+    sed -e 's/[[:space:]]*$//' | \
+    head -n 1
+}
+
 # Check .env file and required variables
 check_env_file() {
   local env_file=".env"
@@ -105,12 +116,24 @@ check_env_file() {
     echo "" >&2
     echo "💡 Please create a .env file with the following required variables:" >&2
     echo "   - JWT_SECRET (at least 32 characters)" >&2
-    echo "   - ENCRYPTION_KEY (32 bytes: 64 hex characters or 32 raw bytes)" >&2
+    echo "   - MASTER_KEY_ACTIVE (32 bytes: 64 hex characters or 32 raw bytes)" >&2
+    echo "   - MASTER_KEY_ACTIVE_ID (non-empty key id)" >&2
     echo "   - ACCOUNT_LOOKUP_PEPPER (at least 32 bytes: hex, base64, or raw)" >&2
+    echo "   - JWT_SECRET_MIN_LEN, JWT_ISSUER, JWT_AUDIENCE, JWT_EXPIRATION_MINUTES" >&2
+    echo "   - ALLOWED_ORIGINS, BACKEND_PORT" >&2
+    echo "   - MAX_BASE64_LOGIN_LEN, MAX_BASE64_TODO_LEN" >&2
+    echo "   - MAX_REQUEST_BODY_BYTES, MAX_JSON_DEPTH, MAX_TITLE_LENGTH, MIN_TITLE_LENGTH, MAX_TAG_LENGTH, MAX_TAGS_PER_TODO" >&2
+    echo "   - INTERNAL_ID_LENGTH" >&2
+    echo "   - ARGON2_MEMORY_KIB, ARGON2_TIME, ARGON2_PARALLELISM, ARGON2_SALT_LENGTH, ARGON2_HASH_LENGTH" >&2
+    echo "   - PENDING_TOKEN_TTL_SEC, PENDING_CLEANUP_INTERVAL_SEC, PENDING_ID_BYTES" >&2
+    echo "   - RATE_LIMIT_MAX_TOKENS, RATE_LIMIT_REFILL_INTERVAL_SEC, RATE_LIMIT_CLEANUP_INTERVAL_SEC, RATE_LIMIT_MAX_BUCKETS" >&2
+    echo "   - SERVER_READ_HEADER_TIMEOUT_SEC, SERVER_READ_TIMEOUT_SEC, SERVER_WRITE_TIMEOUT_SEC, SERVER_IDLE_TIMEOUT_SEC, SERVER_MAX_HEADER_BYTES" >&2
+    echo "   - DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DB_SSL_MODE" >&2
     echo "" >&2
     echo "💡 Example generation commands:" >&2
     echo "   JWT_SECRET: openssl rand -base64 32" >&2
-    echo "   ENCRYPTION_KEY: openssl rand -hex 32" >&2
+    echo "   MASTER_KEY_ACTIVE: openssl rand -hex 32" >&2
+    echo "   MASTER_KEY_ACTIVE_ID: openssl rand -hex 4" >&2
     echo "   ACCOUNT_LOOKUP_PEPPER: openssl rand -hex 32" >&2
     exit 1
   fi
@@ -127,36 +150,79 @@ check_env_file() {
       sed -e 's/[[:space:]]*$//' | \
       head -n 1
   }
+
+  check_nonempty() {
+    local var_name="$1"
+    local value
+    value=$(get_env_var "$var_name")
+    if [ -z "$value" ]; then
+      missing_vars+=("$var_name")
+      return 1
+    fi
+    echo "✅ $var_name is set"
+    return 0
+  }
+
+  check_positive_int() {
+    local var_name="$1"
+    local value
+    value=$(get_env_var "$var_name")
+    if [ -z "$value" ]; then
+      missing_vars+=("$var_name")
+      return 1
+    fi
+    if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -le 0 ]; then
+      invalid_vars+=("$var_name (must be a positive integer, current: $value)")
+      return 1
+    fi
+    echo "✅ $var_name is set (value: $value)"
+    return 0
+  }
   
   # Check JWT_SECRET
   local jwt_secret=$(get_env_var "JWT_SECRET")
   if [ -z "$jwt_secret" ]; then
     missing_vars+=("JWT_SECRET")
-  elif [ ${#jwt_secret} -lt 32 ]; then
-    invalid_vars+=("JWT_SECRET (must be at least 32 characters, current: ${#jwt_secret})")
   else
-    echo "✅ JWT_SECRET is set and valid (length: ${#jwt_secret})"
+    local jwt_min_len=$(get_env_var "JWT_SECRET_MIN_LEN")
+    if [[ "$jwt_min_len" =~ ^[0-9]+$ ]] && [ "$jwt_min_len" -gt 0 ]; then
+      if [ ${#jwt_secret} -lt "$jwt_min_len" ]; then
+        invalid_vars+=("JWT_SECRET (must be at least ${jwt_min_len} characters, current: ${#jwt_secret})")
+      else
+        echo "✅ JWT_SECRET is set and valid (length: ${#jwt_secret})"
+      fi
+    elif [ ${#jwt_secret} -lt 32 ]; then
+      invalid_vars+=("JWT_SECRET (must be at least 32 characters, current: ${#jwt_secret})")
+    else
+      echo "✅ JWT_SECRET is set and valid (length: ${#jwt_secret})"
+    fi
   fi
   
-  # Check ENCRYPTION_KEY
-  local encryption_key=$(get_env_var "ENCRYPTION_KEY")
-  if [ -z "$encryption_key" ]; then
-    missing_vars+=("ENCRYPTION_KEY")
+  # Check MASTER_KEY_ACTIVE
+  local master_key_active=$(get_env_var "MASTER_KEY_ACTIVE")
+  if [ -z "$master_key_active" ]; then
+    missing_vars+=("MASTER_KEY_ACTIVE")
   else
-    local key_len=${#encryption_key}
-    # Check if it's 64 hex characters or 32 raw bytes
+    local key_len=${#master_key_active}
     if [ $key_len -eq 64 ]; then
-      # Check if it's valid hex
-      if [[ "$encryption_key" =~ ^[0-9a-fA-F]{64}$ ]]; then
-        echo "✅ ENCRYPTION_KEY is set and valid (64 hex characters)"
+      if [[ "$master_key_active" =~ ^[0-9a-fA-F]{64}$ ]]; then
+        echo "✅ MASTER_KEY_ACTIVE is set and valid (64 hex characters)"
       else
-        invalid_vars+=("ENCRYPTION_KEY (64 characters but not valid hex format)")
+        invalid_vars+=("MASTER_KEY_ACTIVE (64 characters but not valid hex format)")
       fi
     elif [ $key_len -eq 32 ]; then
-      echo "✅ ENCRYPTION_KEY is set and valid (32 raw bytes)"
+      echo "✅ MASTER_KEY_ACTIVE is set and valid (32 raw bytes)"
     else
-      invalid_vars+=("ENCRYPTION_KEY (must be 32 bytes or 64 hex characters, current: $key_len)")
+      invalid_vars+=("MASTER_KEY_ACTIVE (must be 32 bytes or 64 hex characters, current: $key_len)")
     fi
+  fi
+
+  # Check MASTER_KEY_ACTIVE_ID
+  local master_key_active_id=$(get_env_var "MASTER_KEY_ACTIVE_ID")
+  if [ -z "$master_key_active_id" ]; then
+    missing_vars+=("MASTER_KEY_ACTIVE_ID")
+  else
+    echo "✅ MASTER_KEY_ACTIVE_ID is set (length: ${#master_key_active_id})"
   fi
   
   # Check ACCOUNT_LOOKUP_PEPPER
@@ -181,6 +247,58 @@ check_env_file() {
       invalid_vars+=("ACCOUNT_LOOKUP_PEPPER (must be at least 32 bytes, current decoded length: ~$byte_len)")
     fi
   fi
+
+  # JWT config
+  check_positive_int "JWT_SECRET_MIN_LEN"
+  check_nonempty "JWT_ISSUER"
+  check_nonempty "JWT_AUDIENCE"
+  check_positive_int "JWT_EXPIRATION_MINUTES"
+
+  # CORS and server config
+  check_nonempty "ALLOWED_ORIGINS"
+  check_nonempty "BACKEND_PORT"
+  check_positive_int "SERVER_READ_HEADER_TIMEOUT_SEC"
+  check_positive_int "SERVER_READ_TIMEOUT_SEC"
+  check_positive_int "SERVER_WRITE_TIMEOUT_SEC"
+  check_positive_int "SERVER_IDLE_TIMEOUT_SEC"
+  check_positive_int "SERVER_MAX_HEADER_BYTES"
+
+  # Request/validation limits
+  check_positive_int "MAX_REQUEST_BODY_BYTES"
+  check_positive_int "MAX_JSON_DEPTH"
+  check_positive_int "MAX_TITLE_LENGTH"
+  check_positive_int "MIN_TITLE_LENGTH"
+  check_positive_int "MAX_TAG_LENGTH"
+  check_positive_int "MAX_TAGS_PER_TODO"
+  check_positive_int "MAX_BASE64_LOGIN_LEN"
+  check_positive_int "MAX_BASE64_TODO_LEN"
+  check_positive_int "INTERNAL_ID_LENGTH"
+
+  # Argon2id config
+  check_positive_int "ARGON2_MEMORY_KIB"
+  check_positive_int "ARGON2_TIME"
+  check_positive_int "ARGON2_PARALLELISM"
+  check_positive_int "ARGON2_SALT_LENGTH"
+  check_positive_int "ARGON2_HASH_LENGTH"
+
+  # Pending registration config
+  check_positive_int "PENDING_TOKEN_TTL_SEC"
+  check_positive_int "PENDING_CLEANUP_INTERVAL_SEC"
+  check_positive_int "PENDING_ID_BYTES"
+
+  # Rate limiting config
+  check_positive_int "RATE_LIMIT_MAX_TOKENS"
+  check_positive_int "RATE_LIMIT_REFILL_INTERVAL_SEC"
+  check_positive_int "RATE_LIMIT_CLEANUP_INTERVAL_SEC"
+  check_positive_int "RATE_LIMIT_MAX_BUCKETS"
+
+  # Database config
+  check_nonempty "DB_HOST"
+  check_nonempty "DB_PORT"
+  check_nonempty "DB_USER"
+  check_nonempty "DB_PASSWORD"
+  check_nonempty "DB_NAME"
+  check_nonempty "DB_SSL_MODE"
   
   # Report missing variables
   if [ ${#missing_vars[@]} -gt 0 ]; then
@@ -222,6 +340,14 @@ check_docker_compose
 
 # Check .env file before proceeding
 check_env_file
+
+# Load DB settings for local test runs (avoid sourcing .env)
+ENV_DB_USER="$(get_env_var_from_file "DB_USER")"
+ENV_DB_PASSWORD="$(get_env_var_from_file "DB_PASSWORD")"
+ENV_DB_NAME="$(get_env_var_from_file "DB_NAME")"
+ENV_DB_PORT="$(get_env_var_from_file "DB_PORT")"
+ENV_DB_SSL_MODE="$(get_env_var_from_file "DB_SSL_MODE")"
+TEST_DB_HOST="localhost"
 
 # Check Go only if running tests locally
 if [ -f "/.dockerenv" ] || grep -q docker /proc/self/cgroup 2>/dev/null; then
@@ -307,40 +433,70 @@ run_tests_in_docker() {
     "
 }
 
+# Ensure the configured DB exists in the Postgres container (for local tests)
+ensure_db_exists() {
+    local db_name="$1"
+    if [ -z "$db_name" ]; then
+        echo "⚠️  Skipping database creation: DB_NAME is empty"
+        return 1
+    fi
+    if ! [[ "$db_name" =~ ^[A-Za-z0-9_]+$ ]]; then
+        echo "⚠️  Skipping database creation: invalid DB_NAME '$db_name'"
+        return 1
+    fi
+    if ! $DOCKER_COMPOSE_CMD exec -T postgres psql -U "$ENV_DB_USER" -d postgres -tAc \
+        "SELECT 1 FROM pg_database WHERE datname='${db_name}'" | grep -q 1; then
+        echo "🛠️  Creating database '$db_name' for tests..."
+        $DOCKER_COMPOSE_CMD exec -T postgres psql -U "$ENV_DB_USER" -d postgres \
+          -c "CREATE DATABASE ${db_name};"
+    fi
+}
+
+# Run go test with explicit DB settings (for local tests)
+go_test_with_db_env() {
+    DB_HOST="$TEST_DB_HOST" \
+    DB_PORT="$ENV_DB_PORT" \
+    DB_USER="$ENV_DB_USER" \
+    DB_PASSWORD="$ENV_DB_PASSWORD" \
+    DB_NAME="$ENV_DB_NAME" \
+    DB_SSL_MODE="$ENV_DB_SSL_MODE" \
+    go test -tags test "$@"
+}
+
 # Function to run tests locally
 run_tests_local() {
     echo ""
     echo "🧪 Running migration tests (MUST PASS FIRST)..."
     cd backend
-    go test -tags test ./tests/database -v || exit 1
+    go_test_with_db_env ./tests/database -v || exit 1
     
     echo ""
     echo "🧪 Running authentication tests..."
-    go test -tags test ./tests/auth -v || exit 1
+    go_test_with_db_env ./tests/auth -v || exit 1
     
     echo ""
     echo "🧪 Running encryption tests..."
-    go test -tags test ./tests/encryption -v || exit 1
+    go_test_with_db_env ./tests/encryption -v || exit 1
     
     echo ""
     echo "🧪 Running middleware tests..."
-    go test -tags test ./tests/middleware -v || exit 1
+    go_test_with_db_env ./tests/middleware -v || exit 1
     
     echo ""
     echo "🧪 Running todo service tests..."
-    go test -tags test ./tests/todo -v || exit 1
+    go_test_with_db_env ./tests/todo -v || exit 1
     
     echo ""
     echo "🧪 Running integration tests..."
-    go test -tags test ./tests/integration -v || exit 1
+    go_test_with_db_env ./tests/integration -v || exit 1
     
     echo ""
     echo "🧪 Running handler tests..."
-    go test -tags test ./tests/handlers -v || exit 1
+    go_test_with_db_env ./tests/handlers -v || exit 1
     
     echo ""
     echo "🧪 Running utils tests..."
-    go test -tags test ./tests/utils -v || exit 1
+    go_test_with_db_env ./tests/utils -v || exit 1
     
     echo ""
     echo "✅ All tests passed!"
@@ -350,11 +506,13 @@ run_tests_local() {
 # Run tests based on environment
 TEST_EXIT_CODE=0
 if [ "$TEST_ENV" == "docker" ]; then
+    ensure_db_exists "$ENV_DB_NAME"
     run_tests_in_docker || TEST_EXIT_CODE=$?
 else
     # Check if Docker Compose is running (for database)
     if $DOCKER_COMPOSE_CMD ps postgres 2>/dev/null | grep -q "Up"; then
         echo "✅ Database is running, running tests locally..."
+        ensure_db_exists "$ENV_DB_NAME"
         run_tests_local || TEST_EXIT_CODE=$?
     else
         echo "⚠️  Database not running. Starting database for tests..."
@@ -364,7 +522,7 @@ else
         echo "⏳ Waiting for database to be ready..."
         timeout=30
         while [ $timeout -gt 0 ]; do
-            if $DOCKER_COMPOSE_CMD exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
+            if $DOCKER_COMPOSE_CMD exec -T postgres pg_isready -U "$ENV_DB_USER" >/dev/null 2>&1; then
                 echo "✅ Database is ready!"
                 break
             fi
@@ -376,7 +534,8 @@ else
             echo "❌ Database failed to start in time"
             exit 1
         fi
-        
+
+        ensure_db_exists "$ENV_DB_NAME"
         run_tests_local || TEST_EXIT_CODE=$?
     fi
 fi

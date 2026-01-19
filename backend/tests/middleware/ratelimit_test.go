@@ -20,7 +20,7 @@ func TestRateLimitMiddleware_WithinLimit(t *testing.T) {
 	// Reset rate limiter to ensure clean state
 	middleware.ResetRateLimiterForTesting()
 
-	req := httptest.NewRequest("POST", "/api/v1/login", nil)
+	req := httptest.NewRequest("POST", "/api/v2/login", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
 
 	rr := httptest.NewRecorder()
@@ -50,7 +50,7 @@ func TestRateLimitMiddleware_ExceedsLimit(t *testing.T) {
 	// Reset rate limiter to ensure clean state
 	middleware.ResetRateLimiterForTesting()
 
-	req := httptest.NewRequest("POST", "/api/v1/login", nil)
+	req := httptest.NewRequest("POST", "/api/v2/login", nil)
 	req.RemoteAddr = "127.0.0.1:54321"
 
 	rr := httptest.NewRecorder()
@@ -103,13 +103,13 @@ func TestRateLimitMiddleware_DifferentIPs(t *testing.T) {
 	handler := http.HandlerFunc(testHandler)
 
 	// Request from IP1
-	req1 := httptest.NewRequest("POST", "/api/v1/login", nil)
+	req1 := httptest.NewRequest("POST", "/api/v2/login", nil)
 	req1.RemoteAddr = "127.0.0.1:11111"
 	rr1 := httptest.NewRecorder()
 	handler.ServeHTTP(rr1, req1)
 
 	// Request from IP2
-	req2 := httptest.NewRequest("POST", "/api/v1/login", nil)
+	req2 := httptest.NewRequest("POST", "/api/v2/login", nil)
 	req2.RemoteAddr = "127.0.0.2:22222"
 	rr2 := httptest.NewRecorder()
 	handler.ServeHTTP(rr2, req2)
@@ -129,8 +129,12 @@ func TestRateLimitMiddleware_XRealIP(t *testing.T) {
 
 	// Reset rate limiter to ensure clean state
 	middleware.ResetRateLimiterForTesting()
+	middleware.ResetTrustedProxiesForTesting()
 
-	req := httptest.NewRequest("POST", "/api/v1/login", nil)
+	// Trust the reverse proxy IP so X-Real-IP is honored
+	t.Setenv("TRUSTED_PROXIES", "127.0.0.1")
+
+	req := httptest.NewRequest("POST", "/api/v2/login", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("X-Real-IP", "192.168.1.100") // Trusted proxy header
 
@@ -161,7 +165,7 @@ func TestRateLimitMiddleware_TokenRefill(t *testing.T) {
 	// Reset rate limiter to ensure clean state
 	middleware.ResetRateLimiterForTesting()
 
-	req := httptest.NewRequest("POST", "/api/v1/login", nil)
+	req := httptest.NewRequest("POST", "/api/v2/login", nil)
 	req.RemoteAddr = "127.0.0.1:99999"
 
 	handlerCalled := 0

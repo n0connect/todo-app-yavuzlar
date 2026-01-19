@@ -20,9 +20,9 @@ func TestBuildAAD_Format(t *testing.T) {
 
 	aad := encryption.BuildAAD(userUUID, todoID, field, purpose)
 
-	// AAD should be exactly 39 bytes
-	if len(aad) != 39 {
-		t.Errorf("BuildAAD() length = %d, want 39", len(aad))
+	// AAD should be exactly 55 bytes
+	if len(aad) != 55 {
+		t.Errorf("BuildAAD() length = %d, want 55", len(aad))
 	}
 
 	// AAD should start with magic bytes

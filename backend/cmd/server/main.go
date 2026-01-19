@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"net/http"
-	"time"
 
 	"todo-app-backend/internal/config"
 	"todo-app-backend/internal/database"
@@ -46,20 +45,30 @@ func main() {
 
 	mainLogger.Info("HTTP routes configured successfully")
 
-	backendPort := config.GetEnv("BACKEND_PORT", "8080")
+	backendPort := config.GetBackendPort()
+	if backendPort == "" {
+		mainLogger.Error("BACKEND_PORT is required")
+		log.Fatal("Configuration error: BACKEND_PORT is required")
+	}
 	mainLogger.Info("Server starting on port %s", backendPort)
 
 	// -- Server custom srv settings
 	mainLogger.Info("Setting Custom server settings for HTTP server...")
 	addr := ":" + backendPort
+	readHeaderTimeout := config.GetServerReadHeaderTimeout()
+	readTimeout := config.GetServerReadTimeout()
+	writeTimeout := config.GetServerWriteTimeout()
+	idleTimeout := config.GetServerIdleTimeout()
+	maxHeaderBytes := config.GetServerMaxHeaderBytes()
+
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      15 * time.Second,
-		IdleTimeout:       60 * time.Second,
-		MaxHeaderBytes:    1 << 20, // 1 MB
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+		MaxHeaderBytes:    maxHeaderBytes,
 	}
 
 	mainLogger.Info("Server is ready to accept connections")
@@ -69,34 +78,34 @@ func main() {
 // Fix middleware handlers
 // Add http.NewServeMux() for not accept extra endpoints.
 func setupRoutes(mux *http.ServeMux) {
-	mainLogger.Debug("Registering route: POST /api/v1/register")
-	mux.HandleFunc("/api/v1/register", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.RateLimitMiddleware(handlers.RegisterHandler)))))
+	mainLogger.Debug("Registering route: POST /api/v2/register")
+	mux.HandleFunc("/api/v2/register", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.RateLimitMiddleware(handlers.RegisterHandler)))))
 
-	mainLogger.Debug("Registering route: POST /api/v1/login")
-	mux.HandleFunc("/api/v1/login", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.RateLimitMiddleware(handlers.LoginHandler)))))
+	mainLogger.Debug("Registering route: POST /api/v2/login")
+	mux.HandleFunc("/api/v2/login", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.RateLimitMiddleware(handlers.LoginHandler)))))
 
-	mainLogger.Debug("Registering route: GET/POST /api/v1/todos")
-	mux.HandleFunc("/api/v1/todos", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	mainLogger.Debug("Registering route: GET/POST /api/v2/todos")
+	mux.HandleFunc("/api/v2/todos", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			handlers.GetTodosHandler(w, r)
 		case http.MethodPost:
 			handlers.CreateTodoHandler(w, r)
 		default:
-			mainLogger.Warn("Method not allowed for /api/v1/todos: %s", r.Method)
+			mainLogger.Warn("Method not allowed for /api/v2/todos: %s", r.Method)
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))))
 
-	mainLogger.Debug("Registering route: PUT/DELETE /api/v1/todos/")
-	mux.HandleFunc("/api/v1/todos/", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	mainLogger.Debug("Registering route: PUT/DELETE /api/v2/todos/")
+	mux.HandleFunc("/api/v2/todos/", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPut:
 			handlers.UpdateTodoHandler(w, r)
 		case http.MethodDelete:
 			handlers.DeleteTodoHandler(w, r)
 		default:
-			mainLogger.Warn("Method not allowed for /api/v1/todos/: %s", r.Method)
+			mainLogger.Warn("Method not allowed for /api/v2/todos/: %s", r.Method)
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))))

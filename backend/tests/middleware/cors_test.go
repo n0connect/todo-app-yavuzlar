@@ -13,7 +13,7 @@ func TestCORSMiddleware_AllowedOrigin(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
 
-	req := httptest.NewRequest("OPTIONS", "/api/v1/login", nil)
+	req := httptest.NewRequest("OPTIONS", "/api/v2/login", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
 	req.Header.Set("Access-Control-Request-Method", "POST")
 
@@ -42,7 +42,7 @@ func TestCORSMiddleware_PreflightRequest(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
 
-	req := httptest.NewRequest("OPTIONS", "/api/v1/login", nil)
+	req := httptest.NewRequest("OPTIONS", "/api/v2/login", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
 	req.Header.Set("Access-Control-Request-Method", "POST")
 	req.Header.Set("Access-Control-Request-Headers", "Content-Type,Authorization")
@@ -77,7 +77,7 @@ func TestCORSMiddleware_ActualRequest(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
 
-	req := httptest.NewRequest("POST", "/api/v1/login", nil)
+	req := httptest.NewRequest("POST", "/api/v2/login", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
 
 	rr := httptest.NewRecorder()

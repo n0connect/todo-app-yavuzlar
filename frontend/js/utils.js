@@ -2,7 +2,9 @@
 // UTILITY FUNCTIONS
 // ========================================
 
-const API_BASE_URL = '/api/v1';
+const API_BASE_URL = '/api/v2';
+const ACCOUNT_NUMBER_LEN = 43;
+const ACCOUNT_NUMBER_REGEX = /^[A-Za-z0-9_-]{43}$/;
 let userAccountNumber = null;
 let currentFilter = 'all';
 let todos = [];

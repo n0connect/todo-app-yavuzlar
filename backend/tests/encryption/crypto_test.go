@@ -55,6 +55,22 @@ func TestEncryptWithAAD_Basic(t *testing.T) {
 	}
 }
 
+func TestEncryptWithAAD_InvalidAADLength(t *testing.T) {
+	testutil.SetupTestEnv(t)
+	defer testutil.TeardownTestEnv(t)
+
+	userKey, err := encryption.GenerateUserAESKey()
+	if err != nil {
+		t.Fatalf("GenerateUserAESKey() failed: %v", err)
+	}
+
+	badAAD := make([]byte, encryption.AADLength-1)
+	_, err = encryption.EncryptWithAAD("data", userKey, badAAD)
+	if err == nil {
+		t.Error("EncryptWithAAD() with invalid AAD length should fail")
+	}
+}
+
 func TestEncryptWithAAD_CrossUserSwap_ShouldFail(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
@@ -171,10 +187,9 @@ func TestEncryptWithMasterKey(t *testing.T) {
 	testutil.SetupTestEnv(t)
 	defer testutil.TeardownTestEnv(t)
 
-	// Skip: This test requires database.EncryptionKey to be initialized
-	// which requires database.Init() to be called
+	// Skip: This test requires master key initialization with database.Init()
 	// For full test, see integration tests with database setup
-	t.Skip("TestEncryptWithMasterKey requires database.EncryptionKey initialization (database.Init())")
+	t.Skip("TestEncryptWithMasterKey requires master key initialization (database.Init())")
 
 	// Convert to hex for storage
 	userKeyHex := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -190,7 +205,7 @@ func TestEncryptWithMasterKey(t *testing.T) {
 	}
 
 	// Decrypt
-	decryptedBytes, err := encryption.DecryptUserKey(encrypted)
+	decryptedBytes, err := encryption.DecryptUserKey(encrypted, encryption.ActiveMasterKeyID())
 	if err != nil {
 		t.Fatalf("DecryptUserKey() failed: %v", err)
 	}

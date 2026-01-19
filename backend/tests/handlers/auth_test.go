@@ -50,7 +50,7 @@ func TestRegisterResponse_Structure(t *testing.T) {
 	response := models.RegisterResponse{
 		Success:       true,
 		Message:       "Account created successfully",
-		AccountNumber: "ABCDEFGHIJKLMNOPQRSTUVWXYZab12",
+		AccountNumber: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg",
 		Token:         "test-token",
 		Confirmed:     true,
 	}

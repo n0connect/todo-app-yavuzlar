@@ -6,11 +6,23 @@ import (
 	"strings"
 	"testing"
 
+	"todo-app-backend/internal/config"
 	"todo-app-backend/internal/models"
 	"todo-app-backend/internal/utils"
+	"todo-app-backend/tests/testutil"
 )
 
+func setupJSONTestEnv(t *testing.T) {
+	t.Helper()
+	testutil.SetupTestEnv(t)
+	t.Cleanup(func() {
+		testutil.TeardownTestEnv(t)
+	})
+}
+
 func TestDecodeJSONRequest_ValidDepth(t *testing.T) {
+	setupJSONTestEnv(t)
+
 	// Test with valid depth (depth 2 - TodoRequest with Tags array)
 	jsonBody := `{
 		"title": "Test todo",
@@ -19,7 +31,7 @@ func TestDecodeJSONRequest_ValidDepth(t *testing.T) {
 		"priority": "high"
 	}`
 
-	req := httptest.NewRequest("POST", "/api/v1/todos", bytes.NewBufferString(jsonBody))
+	req := httptest.NewRequest("POST", "/api/v2/todos", bytes.NewBufferString(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	var todoReq models.TodoRequest
@@ -37,11 +49,13 @@ func TestDecodeJSONRequest_ValidDepth(t *testing.T) {
 }
 
 func TestDecodeJSONRequest_ExceedsMaxDepth(t *testing.T) {
+	setupJSONTestEnv(t)
+
 	// Create deeply nested JSON (depth > MaxJSONDepth = 2)
 	// Build a JSON with 5 levels of nesting (should be rejected)
 	nestedJSON := strings.Repeat(`{"a":`, 5) + `"value"` + strings.Repeat(`}`, 5)
 
-	req := httptest.NewRequest("POST", "/api/v1/test", bytes.NewBufferString(nestedJSON))
+	req := httptest.NewRequest("POST", "/api/v2/test", bytes.NewBufferString(nestedJSON))
 	req.Header.Set("Content-Type", "application/json")
 
 	var result map[string]interface{}
@@ -56,12 +70,14 @@ func TestDecodeJSONRequest_ExceedsMaxDepth(t *testing.T) {
 }
 
 func TestDecodeJSONRequest_ValidShallowDepth(t *testing.T) {
+	setupJSONTestEnv(t)
+
 	// Test with shallow depth (depth 1 - LoginRequest)
 	jsonBody := `{
-		"account_number": "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq"
+		"account_number": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg"
 	}`
 
-	req := httptest.NewRequest("POST", "/api/v1/login", bytes.NewBufferString(jsonBody))
+	req := httptest.NewRequest("POST", "/api/v2/login", bytes.NewBufferString(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	var loginReq models.LoginRequest
@@ -70,19 +86,21 @@ func TestDecodeJSONRequest_ValidShallowDepth(t *testing.T) {
 		t.Fatalf("DecodeJSONRequest() failed with shallow depth: %v", err)
 	}
 
-	if loginReq.AccountNumber != "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq" {
+	if loginReq.AccountNumber != "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg" {
 		t.Errorf("Expected account_number, got '%s'", loginReq.AccountNumber)
 	}
 }
 
 func TestDecodeJSONRequest_ArrayDepth(t *testing.T) {
+	setupJSONTestEnv(t)
+
 	// Test with array nesting (depth 2)
 	jsonBody := `{
 		"title": "Test",
 		"tags": ["tag1", "tag2"]
 	}`
 
-	req := httptest.NewRequest("POST", "/api/v1/todos", bytes.NewBufferString(jsonBody))
+	req := httptest.NewRequest("POST", "/api/v2/todos", bytes.NewBufferString(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	var todoReq models.TodoRequest
@@ -97,13 +115,15 @@ func TestDecodeJSONRequest_ArrayDepth(t *testing.T) {
 }
 
 func TestDecodeJSONRequest_UnknownFields(t *testing.T) {
+	setupJSONTestEnv(t)
+
 	// Test that unknown fields are rejected
 	jsonBody := `{
-		"account_number": "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq",
+		"account_number": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefg",
 		"malicious_field": "attack"
 	}`
 
-	req := httptest.NewRequest("POST", "/api/v1/login", bytes.NewBufferString(jsonBody))
+	req := httptest.NewRequest("POST", "/api/v2/login", bytes.NewBufferString(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	var loginReq models.LoginRequest
@@ -114,10 +134,16 @@ func TestDecodeJSONRequest_UnknownFields(t *testing.T) {
 }
 
 func TestDecodeJSONRequest_SizeLimit(t *testing.T) {
-	// Test that large request bodies are rejected
-	largeBody := strings.Repeat("A", utils.MaxRequestBodySize+1)
+	setupJSONTestEnv(t)
 
-	req := httptest.NewRequest("POST", "/api/v1/test", bytes.NewBufferString(largeBody))
+	// Test that large request bodies are rejected
+	maxBytes := config.GetMaxRequestBodyBytes()
+	if maxBytes <= 0 {
+		t.Fatal("MAX_REQUEST_BODY_BYTES not configured in test env")
+	}
+	largeBody := strings.Repeat("A", maxBytes+1)
+
+	req := httptest.NewRequest("POST", "/api/v2/test", bytes.NewBufferString(largeBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	var result map[string]interface{}
@@ -132,10 +158,12 @@ func TestDecodeJSONRequest_SizeLimit(t *testing.T) {
 }
 
 func TestDecodeJSONRequest_InvalidJSON(t *testing.T) {
+	setupJSONTestEnv(t)
+
 	// Test with invalid JSON
 	invalidJSON := `{invalid json}`
 
-	req := httptest.NewRequest("POST", "/api/v1/test", bytes.NewBufferString(invalidJSON))
+	req := httptest.NewRequest("POST", "/api/v2/test", bytes.NewBufferString(invalidJSON))
 	req.Header.Set("Content-Type", "application/json")
 
 	var result map[string]interface{}
@@ -146,8 +174,10 @@ func TestDecodeJSONRequest_InvalidJSON(t *testing.T) {
 }
 
 func TestDecodeJSONRequest_EmptyBody(t *testing.T) {
+	setupJSONTestEnv(t)
+
 	// Test with empty body
-	req := httptest.NewRequest("POST", "/api/v1/register", bytes.NewBufferString(""))
+	req := httptest.NewRequest("POST", "/api/v2/register", bytes.NewBufferString(""))
 	req.Header.Set("Content-Type", "application/json")
 
 	var registerReq models.RegisterRequest
@@ -160,10 +190,16 @@ func TestDecodeJSONRequest_EmptyBody(t *testing.T) {
 }
 
 func TestDecodeJSONRequest_MaxDepthBoundary(t *testing.T) {
-	// Test with exactly MaxJSONDepth (2) levels - should succeed
-	nestedJSON := strings.Repeat(`{"a":`, utils.MaxJSONDepth) + `"value"` + strings.Repeat(`}`, utils.MaxJSONDepth)
+	setupJSONTestEnv(t)
 
-	req := httptest.NewRequest("POST", "/api/v1/test", bytes.NewBufferString(nestedJSON))
+	// Test with exactly MaxJSONDepth (2) levels - should succeed
+	maxDepth := config.GetMaxJSONDepth()
+	if maxDepth <= 0 {
+		t.Fatal("MAX_JSON_DEPTH not configured in test env")
+	}
+	nestedJSON := strings.Repeat(`{"a":`, maxDepth) + `"value"` + strings.Repeat(`}`, maxDepth)
+
+	req := httptest.NewRequest("POST", "/api/v2/test", bytes.NewBufferString(nestedJSON))
 	req.Header.Set("Content-Type", "application/json")
 
 	var result map[string]interface{}
@@ -175,10 +211,16 @@ func TestDecodeJSONRequest_MaxDepthBoundary(t *testing.T) {
 }
 
 func TestDecodeJSONRequest_MaxDepthPlusOne(t *testing.T) {
-	// Test with MaxJSONDepth + 1 levels (3 levels, should fail)
-	nestedJSON := strings.Repeat(`{"a":`, utils.MaxJSONDepth+1) + `"value"` + strings.Repeat(`}`, utils.MaxJSONDepth+1)
+	setupJSONTestEnv(t)
 
-	req := httptest.NewRequest("POST", "/api/v1/test", bytes.NewBufferString(nestedJSON))
+	// Test with MaxJSONDepth + 1 levels (3 levels, should fail)
+	maxDepth := config.GetMaxJSONDepth()
+	if maxDepth <= 0 {
+		t.Fatal("MAX_JSON_DEPTH not configured in test env")
+	}
+	nestedJSON := strings.Repeat(`{"a":`, maxDepth+1) + `"value"` + strings.Repeat(`}`, maxDepth+1)
+
+	req := httptest.NewRequest("POST", "/api/v2/test", bytes.NewBufferString(nestedJSON))
 	req.Header.Set("Content-Type", "application/json")
 
 	var result map[string]interface{}
@@ -193,10 +235,12 @@ func TestDecodeJSONRequest_MaxDepthPlusOne(t *testing.T) {
 }
 
 func TestDecodeJSONRequest_Depth3_ShouldFail(t *testing.T) {
+	setupJSONTestEnv(t)
+
 	// Test with depth 3 (should fail, max is 2)
 	nestedJSON := `{"a": {"b": {"c": "value"}}}`
 
-	req := httptest.NewRequest("POST", "/api/v1/test", bytes.NewBufferString(nestedJSON))
+	req := httptest.NewRequest("POST", "/api/v2/test", bytes.NewBufferString(nestedJSON))
 	req.Header.Set("Content-Type", "application/json")
 
 	var result map[string]interface{}
@@ -211,10 +255,12 @@ func TestDecodeJSONRequest_Depth3_ShouldFail(t *testing.T) {
 }
 
 func TestDecodeJSONRequest_Depth2_ShouldSucceed(t *testing.T) {
+	setupJSONTestEnv(t)
+
 	// Test with depth 2 (should succeed, matches TodoRequest with Tags array)
 	jsonBody := `{"tags": ["tag1", "tag2"]}`
 
-	req := httptest.NewRequest("POST", "/api/v1/todos", bytes.NewBufferString(jsonBody))
+	req := httptest.NewRequest("POST", "/api/v2/todos", bytes.NewBufferString(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
 
 	var todoReq models.TodoRequest

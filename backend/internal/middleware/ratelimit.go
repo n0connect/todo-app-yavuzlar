@@ -1,11 +1,12 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
+	"todo-app-backend/internal/config"
 	"todo-app-backend/internal/utils"
 )
 
@@ -66,12 +67,33 @@ type RateLimiter struct {
 	// Cleanup old buckets periodically
 	cleanupInterval time.Duration
 	lastCleanup     time.Time
+	maxTokens       int
+	refillInterval  time.Duration
+	maxBuckets      int
 }
 
 var globalRateLimiter = &RateLimiter{
-	buckets:         make(map[string]*TokenBucket),
-	cleanupInterval: 5 * time.Minute,
-	lastCleanup:     time.Now(),
+	buckets: make(map[string]*TokenBucket),
+}
+
+func (rl *RateLimiter) loadConfig() error {
+	maxTokens := config.GetRateLimitMaxTokens()
+	refillSec := config.GetRateLimitRefillIntervalSeconds()
+	cleanupSec := config.GetRateLimitCleanupIntervalSeconds()
+	maxBuckets := config.GetRateLimitMaxBuckets()
+	if maxTokens <= 0 || refillSec <= 0 || cleanupSec <= 0 || maxBuckets <= 0 {
+		return fmt.Errorf("rate limit config not set")
+	}
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.maxTokens = maxTokens
+	rl.refillInterval = time.Duration(refillSec) * time.Second
+	rl.cleanupInterval = time.Duration(cleanupSec) * time.Second
+	rl.maxBuckets = maxBuckets
+	if rl.lastCleanup.IsZero() {
+		rl.lastCleanup = time.Now()
+	}
+	return nil
 }
 
 // getBucket gets or creates a token bucket for an IP
@@ -85,8 +107,7 @@ func (rl *RateLimiter) getBucket(ip string) *TokenBucket {
 		// Double-check after acquiring write lock
 		bucket, exists = rl.buckets[ip]
 		if !exists {
-			// 20 requests per minute = 1 request per 3 seconds
-			bucket = NewTokenBucket(20, 3*time.Second)
+			bucket = NewTokenBucket(rl.maxTokens, rl.refillInterval)
 			rl.buckets[ip] = bucket
 		}
 		rl.mu.Unlock()
@@ -125,35 +146,25 @@ func (rl *RateLimiter) cleanup() {
 func (rl *RateLimiter) cleanupUnsafe() {
 	// Simple cleanup: if we have too many buckets, clear them
 	// In production, you might want more sophisticated cleanup
-	if len(rl.buckets) > 10000 {
+	if len(rl.buckets) > rl.maxBuckets {
 		rl.buckets = make(map[string]*TokenBucket)
 		rateLimitLogger.Debug("RateLimiter: cleaned up buckets")
 	}
 }
 
-// getClientIP extracts client IP from request
-// SECURITY: Only trusts X-Real-IP (set by trusted proxy like Nginx)
-// X-Forwarded-For is client-controlled and not trusted
-func getClientIP(r *http.Request) string {
-	// Check X-Real-IP header (set by trusted proxy like Nginx)
-	// This is more secure than X-Forwarded-For which is client-controlled
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-
-	// Fallback to RemoteAddr (format: "IP:port")
-	// This is the actual connection IP when no proxy is involved
-	addr := r.RemoteAddr
-	if idx := strings.LastIndex(addr, ":"); idx != -1 {
-		return addr[:idx]
-	}
-	return addr
-}
-
 // RateLimitMiddleware limits requests per IP for login and register endpoints
 func RateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ip := getClientIP(r)
+		if err := globalRateLimiter.loadConfig(); err != nil {
+			rateLimitLogger.LogError("RateLimitConfig", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		ip := ClientIP(r)
+		if ip == "" {
+			ip = "unknown"
+		}
 		bucket := globalRateLimiter.getBucket(ip)
 
 		if !bucket.Allow() {

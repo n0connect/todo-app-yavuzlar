@@ -1,20 +1,38 @@
 package auth
 
 import (
+	"strings"
 	"testing"
 
 	"todo-app-backend/internal/auth"
+	"todo-app-backend/internal/config"
+	"todo-app-backend/tests/testutil"
 )
 
+func setupPendingStoreEnv(t *testing.T) {
+	t.Helper()
+	testutil.SetupTestEnv(t)
+	t.Cleanup(func() {
+		testutil.TeardownTestEnv(t)
+	})
+}
+
 func TestGeneratePendingID(t *testing.T) {
+	setupPendingStoreEnv(t)
+
 	// Test that pending ID is generated and has correct format (32 hex chars = 128 bits)
 	pendingID1, err := auth.GeneratePendingID()
 	if err != nil {
 		t.Fatalf("GeneratePendingID() failed: %v", err)
 	}
 
-	if len(pendingID1) != 32 {
-		t.Errorf("GeneratePendingID() length = %d, want 32 (hex-encoded 128-bit)", len(pendingID1))
+	pendingBytes := config.GetPendingIDBytes()
+	if pendingBytes <= 0 {
+		t.Fatal("PENDING_ID_BYTES not configured in test env")
+	}
+	expectedLen := pendingBytes * 2
+	if len(pendingID1) != expectedLen {
+		t.Errorf("GeneratePendingID() length = %d, want %d (hex-encoded)", len(pendingID1), expectedLen)
 	}
 
 	// Test uniqueness
@@ -42,7 +60,9 @@ func TestGeneratePendingID(t *testing.T) {
 }
 
 func TestStoreAndGetPendingRegistration(t *testing.T) {
-	accountNumber := "ABCDEFGHIJKLMNOPQRSTUVWXYZab12"
+	setupPendingStoreEnv(t)
+
+	accountNumber := strings.Repeat("A", 43)
 
 	// Generate pending ID
 	pendingID, err := auth.GeneratePendingID()
@@ -51,7 +71,9 @@ func TestStoreAndGetPendingRegistration(t *testing.T) {
 	}
 
 	// Store pending registration
-	auth.StorePendingRegistration(pendingID, accountNumber)
+	if err := auth.StorePendingRegistration(pendingID, accountNumber); err != nil {
+		t.Fatalf("StorePendingRegistration() failed: %v", err)
+	}
 
 	// Retrieve it
 	retrieved, err := auth.GetPendingRegistration(pendingID)
@@ -65,6 +87,8 @@ func TestStoreAndGetPendingRegistration(t *testing.T) {
 }
 
 func TestGetPendingRegistration_NotFound(t *testing.T) {
+	setupPendingStoreEnv(t)
+
 	nonExistentID := "00000000000000000000000000000000"
 
 	_, err := auth.GetPendingRegistration(nonExistentID)
@@ -77,7 +101,9 @@ func TestGetPendingRegistration_NotFound(t *testing.T) {
 }
 
 func TestDeletePendingRegistration(t *testing.T) {
-	accountNumber := "ABCDEFGHIJKLMNOPQRSTUVWXYZab12"
+	setupPendingStoreEnv(t)
+
+	accountNumber := strings.Repeat("A", 43)
 
 	// Generate and store
 	pendingID, err := auth.GeneratePendingID()
@@ -85,7 +111,9 @@ func TestDeletePendingRegistration(t *testing.T) {
 		t.Fatalf("GeneratePendingID() failed: %v", err)
 	}
 
-	auth.StorePendingRegistration(pendingID, accountNumber)
+	if err := auth.StorePendingRegistration(pendingID, accountNumber); err != nil {
+		t.Fatalf("StorePendingRegistration() failed: %v", err)
+	}
 
 	// Verify it exists
 	_, err = auth.GetPendingRegistration(pendingID)
@@ -104,7 +132,9 @@ func TestDeletePendingRegistration(t *testing.T) {
 }
 
 func TestPendingRegistration_Expiration(t *testing.T) {
-	accountNumber := "ABCDEFGHIJKLMNOPQRSTUVWXYZab12"
+	setupPendingStoreEnv(t)
+
+	accountNumber := strings.Repeat("A", 43)
 
 	// This test is tricky because we can't easily manipulate time in the store
 	// But we can test that expired entries are cleaned up
@@ -116,7 +146,9 @@ func TestPendingRegistration_Expiration(t *testing.T) {
 		t.Fatalf("GeneratePendingID() failed: %v", err)
 	}
 
-	auth.StorePendingRegistration(pendingID, accountNumber)
+	if err := auth.StorePendingRegistration(pendingID, accountNumber); err != nil {
+		t.Fatalf("StorePendingRegistration() failed: %v", err)
+	}
 
 	// Immediately retrieve should work
 	_, err = auth.GetPendingRegistration(pendingID)
@@ -124,19 +156,23 @@ func TestPendingRegistration_Expiration(t *testing.T) {
 		t.Errorf("GetPendingRegistration() immediately after store failed: %v", err)
 	}
 
-	// Note: Testing actual expiration would require waiting 5+ minutes or mocking time
+	// Note: Testing actual expiration would require waiting for configured TTL or mocking time
 	// This is a limitation of the current implementation
 }
 
 func TestPendingRegistration_OneTimeUse(t *testing.T) {
-	accountNumber := "ABCDEFGHIJKLMNOPQRSTUVWXYZab12"
+	setupPendingStoreEnv(t)
+
+	accountNumber := strings.Repeat("A", 43)
 
 	pendingID, err := auth.GeneratePendingID()
 	if err != nil {
 		t.Fatalf("GeneratePendingID() failed: %v", err)
 	}
 
-	auth.StorePendingRegistration(pendingID, accountNumber)
+	if err := auth.StorePendingRegistration(pendingID, accountNumber); err != nil {
+		t.Fatalf("StorePendingRegistration() failed: %v", err)
+	}
 
 	// First retrieval should work
 	retrieved1, err := auth.GetPendingRegistration(pendingID)

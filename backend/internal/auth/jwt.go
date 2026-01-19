@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"todo-app-backend/internal/config"
@@ -14,15 +15,6 @@ var (
 	ErrInvalidToken = errors.New("invalid token")
 	ErrExpiredToken = errors.New("token expired")
 	jwtLogger       = utils.NewLogger("JWT")
-)
-
-const (
-	// Issuer identifies who created and signed the token
-	TokenIssuer = "todo-app-backend"
-	// Audience identifies the recipients the token is intended for
-	TokenAudience = "todo-app-frontend"
-	// Minimum secret length for security (256 bits = 32 bytes)
-	MinSecretLength = 32
 )
 
 // Claims represents JWT claims with security best practices
@@ -44,10 +36,30 @@ func validateSecret(secret string) error {
 	if secret == "" {
 		return errors.New("JWT_SECRET not configured")
 	}
-	if len(secret) < MinSecretLength {
-		return errors.New("JWT_SECRET too short (minimum 32 characters)")
+	minLen := config.GetJWTSecretMinLength()
+	if minLen <= 0 {
+		return errors.New("JWT_SECRET_MIN_LEN not configured")
+	}
+	if len(secret) < minLen {
+		return fmt.Errorf("JWT_SECRET too short (minimum %d characters)", minLen)
 	}
 	return nil
+}
+
+func getJWTBaseConfig() (string, string, string, error) {
+	secret := config.GetJWTSecret()
+	if err := validateSecret(secret); err != nil {
+		return "", "", "", err
+	}
+	issuer := config.GetJWTIssuer()
+	if issuer == "" {
+		return "", "", "", errors.New("JWT_ISSUER not configured")
+	}
+	audience := config.GetJWTAudience()
+	if audience == "" {
+		return "", "", "", errors.New("JWT_AUDIENCE not configured")
+	}
+	return secret, issuer, audience, nil
 }
 
 // SignToken creates a JWT token for the given user UUID
@@ -55,20 +67,24 @@ func validateSecret(secret string) error {
 func SignToken(userUUID string) (string, error) {
 	jwtLogger.Debug("SignToken: starting token generation for userUUID: %s", userUUID)
 
-	secret := config.GetJWTSecret()
-	if err := validateSecret(secret); err != nil {
+	secret, issuer, audience, err := getJWTBaseConfig()
+	if err != nil {
 		jwtLogger.Error("SignToken: %v", err)
 		return "", err
 	}
 
 	expiration := config.GetJWTExpiration()
+	if expiration <= 0 {
+		jwtLogger.Error("SignToken: invalid JWT_EXPIRATION_MINUTES")
+		return "", errors.New("JWT_EXPIRATION_MINUTES not configured")
+	}
 	now := time.Now()
 	jwtLogger.Debug("SignToken: expiration duration: %v, issued at: %v", expiration, now)
 
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    TokenIssuer,
-			Audience:  jwt.ClaimStrings{TokenAudience},
+			Issuer:    issuer,
+			Audience:  jwt.ClaimStrings{audience},
 			Subject:   userUUID,
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(expiration)),
@@ -91,24 +107,27 @@ func SignToken(userUUID string) (string, error) {
 
 // SignPendingRegistrationToken creates a short-lived JWT for pending registration
 // This token contains the pending ID that references server-side stored AccountNumber
-// Security: Short expiration (5 minutes), contains is_pending flag
+// Security: Short expiration from config, contains is_pending flag
 func SignPendingRegistrationToken(pendingID string) (string, error) {
 	jwtLogger.Debug("SignPendingRegistrationToken: starting for pendingID: %s", pendingID)
 
-	secret := config.GetJWTSecret()
-	if err := validateSecret(secret); err != nil {
+	secret, issuer, audience, err := getJWTBaseConfig()
+	if err != nil {
 		jwtLogger.Error("SignPendingRegistrationToken: %v", err)
 		return "", err
 	}
 
 	now := time.Now()
-	// Short expiration - 5 minutes for pending registration
-	expiration := 5 * time.Minute
+	expiration := config.GetPendingTokenTTL()
+	if expiration <= 0 {
+		jwtLogger.Error("SignPendingRegistrationToken: invalid PENDING_TOKEN_TTL_SEC")
+		return "", errors.New("PENDING_TOKEN_TTL_SEC not configured")
+	}
 
 	claims := PendingRegistrationClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    TokenIssuer,
-			Audience:  jwt.ClaimStrings{TokenAudience},
+			Issuer:    issuer,
+			Audience:  jwt.ClaimStrings{audience},
 			Subject:   "pending_registration",
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(expiration)),
@@ -134,8 +153,8 @@ func SignPendingRegistrationToken(pendingID string) (string, error) {
 func VerifyPendingRegistrationToken(tokenString string) (string, error) {
 	jwtLogger.Debug("VerifyPendingRegistrationToken: starting verification")
 
-	secret := config.GetJWTSecret()
-	if err := validateSecret(secret); err != nil {
+	secret, issuer, audience, err := getJWTBaseConfig()
+	if err != nil {
 		jwtLogger.Error("VerifyPendingRegistrationToken: %v", err)
 		return "", err
 	}
@@ -147,8 +166,8 @@ func VerifyPendingRegistrationToken(tokenString string) (string, error) {
 		}
 		return []byte(secret), nil
 	}, jwt.WithValidMethods([]string{"HS256"}),
-		jwt.WithIssuer(TokenIssuer),
-		jwt.WithAudience(TokenAudience),
+		jwt.WithIssuer(issuer),
+		jwt.WithAudience(audience),
 		jwt.WithExpirationRequired(),
 	)
 
@@ -195,8 +214,8 @@ func VerifyPendingRegistrationToken(tokenString string) (string, error) {
 func VerifyToken(tokenString string) (string, error) {
 	jwtLogger.Debug("VerifyToken: starting token verification, tokenLength=%d", len(tokenString))
 
-	secret := config.GetJWTSecret()
-	if err := validateSecret(secret); err != nil {
+	secret, issuer, audience, err := getJWTBaseConfig()
+	if err != nil {
 		jwtLogger.Error("VerifyToken: %v", err)
 		return "", err
 	}
@@ -211,9 +230,9 @@ func VerifyToken(tokenString string) (string, error) {
 		}
 		return []byte(secret), nil
 	}, jwt.WithValidMethods([]string{"HS256"}), // Explicitly allow only HS256
-		jwt.WithIssuer(TokenIssuer),     // Validate issuer
-		jwt.WithAudience(TokenAudience), // Validate audience
-		jwt.WithExpirationRequired(),    // Require expiration
+		jwt.WithIssuer(issuer),       // Validate issuer
+		jwt.WithAudience(audience),   // Validate audience
+		jwt.WithExpirationRequired(), // Require expiration
 	)
 
 	if err != nil {

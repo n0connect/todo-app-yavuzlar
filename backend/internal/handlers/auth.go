@@ -6,6 +6,7 @@ import (
 
 	"todo-app-backend/internal/auth"
 	"todo-app-backend/internal/encryption"
+	"todo-app-backend/internal/middleware"
 	"todo-app-backend/internal/models"
 	"todo-app-backend/internal/store"
 	"todo-app-backend/internal/utils"
@@ -33,6 +34,9 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Prevent caching of sensitive responses
+	w.Header().Set("Cache-Control", "no-store")
+
 	// Parse request body
 	var req models.RegisterRequest
 	if err := utils.DecodeJSONRequest(r, &req); err != nil {
@@ -46,7 +50,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	if !req.Confirm {
 		authLogger.Debug("Phase 1: Generating AccountNumber preview (no account creation)")
 
-		// Generate AccountNumber (192-bit CSPRNG, base64url encoded)
+		// Generate AccountNumber (256-bit CSPRNG, base64url encoded)
 		accountNumber, err := utils.GenerateAccountNumber()
 		if err != nil {
 			authLogger.LogError("GenerateAccountNumber", err)
@@ -54,7 +58,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Compute lookup for collision check
+		// Compute lookup for collision check (almost impossible)
 		lookup, err := auth.ComputeAccountLookup(accountNumber)
 		if err != nil {
 			authLogger.LogError("ComputeAccountLookup", err)
@@ -70,19 +74,9 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if exists {
-			// Retry once
-			accountNumber, err = utils.GenerateAccountNumber()
-			if err != nil {
-				authLogger.LogError("GenerateAccountNumber (retry)", err)
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
-				return
-			}
-			lookup, err = auth.ComputeAccountLookup(accountNumber)
-			if err != nil {
-				authLogger.LogError("ComputeAccountLookup (retry)", err)
-				http.Error(w, "Internal server error", http.StatusInternalServerError)
-				return
-			}
+			// thanks user for almost impossible situation
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
 		}
 
 		// Generate pending ID and store AccountNumber server-side
@@ -94,7 +88,11 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Store AccountNumber server-side with pending ID
-		auth.StorePendingRegistration(pendingID, accountNumber)
+		if err := auth.StorePendingRegistration(pendingID, accountNumber); err != nil {
+			authLogger.LogError("StorePendingRegistration", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 
 		// Generate pending registration token (contains pending ID, not AccountNumber)
 		pendingToken, err := auth.SignPendingRegistrationToken(pendingID)
@@ -196,12 +194,14 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+	masterKeyID := encryption.ActiveMasterKeyID()
 
 	user := models.User{
 		UUID:          internalUUID,
 		AccountLookup: lookup,
 		AccountHash:   accountHash,
 		EncryptedKey:  encryptedUserKey,
+		MasterKeyID:   masterKeyID,
 	}
 
 	if err := userRepository.Create(&user); err != nil {
@@ -255,6 +255,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Prevent caching of sensitive responses
+	w.Header().Set("Cache-Control", "no-store")
+
 	var req models.LoginRequest
 	if err := utils.DecodeJSONRequest(r, &req); err != nil {
 		authLogger.LogError("DecodeJSONRequest", err)
@@ -266,11 +269,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	// SECURITY: Validate AccountNumber format with strict regex pattern before any database operations
 	// This prevents unnecessary database queries for invalid formats
-	// Pattern: ^[A-Za-z0-9_-]{32}$ - exactly 32 base64url characters
+	// Pattern: ^[A-Za-z0-9_-]{43}$ - exactly 43 base64url characters
 	if !utils.ValidateAccountNumber(req.AccountNumber) {
 		authLogger.Warn("Invalid AccountNumber format in login request: %s", utils.MaskAccountNumber(req.AccountNumber))
-		// Perform dummy hash verification to prevent timing attack
-		auth.PerformDummyHashVerification(req.AccountNumber)
 		utils.EncodeJSONResponse(w, models.LoginResponse{Success: false, Message: "Invalid credentials"}, http.StatusUnauthorized)
 		return
 	}
@@ -281,9 +282,14 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		authLogger.LogError("ComputeAccountLookup", err)
 		authLogger.Warn("Login failed: lookup computation error")
-		// Perform dummy hash verification to prevent timing attack
-		auth.PerformDummyHashVerification(req.AccountNumber)
 		utils.EncodeJSONResponse(w, models.LoginResponse{Success: false, Message: "Invalid credentials"}, http.StatusUnauthorized)
+		return
+	}
+
+	// Apply per-account rate limit using lookup hash
+	if !middleware.AllowAccountLookup(lookup) {
+		authLogger.Warn("Login rate limit exceeded for account lookup")
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
 		return
 	}
 
@@ -298,7 +304,9 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		utils.EncodeJSONResponse(w, models.LoginResponse{Success: false, Message: "Invalid credentials"}, http.StatusUnauthorized)
 		return
 	}
-
+	// IDK - If openssl support constant time computation for argon2id hash
+	// then why we prefer old-school and not secure dummy-hash verification ?
+	// Removed old-school coded parts. Because attack-surface plane is much smaller.
 	// Verify AccountNumber hash
 	if err := auth.VerifyAccountNumberHash(user.AccountHash, req.AccountNumber); err != nil {
 		authLogger.Warn("Login failed: AccountNumber hash verification failed")

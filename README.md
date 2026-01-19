@@ -20,10 +20,24 @@ Secure todo application with Bearer CSPRNG token-based AccountNumber-only authen
 
 This application is a todo management system that authenticates using only cryptographic AccountNumber (no passwords) and encrypts all data with per-user encryption.
 
+## Summary / Update
+
+- OpenSSL-backed crypto engine for AES-256-GCM, HMAC-SHA256, SHA-256, Argon2id, and CSPRNG (JWT stays native)
+- `/api/v2` only: 256-bit AccountNumber + AAD v2 with full SHA-256 user tag
+- Master key rotation with active key ID + explicit old key list (decrypt-only, no silent fallback; legacy ENCRYPTION_KEY removed)
+- Config-driven limits with secure defaults in config/setup; override via `.env`
+
+## Summary / Implementations
+
+- OpenSSL-backed crypto engine for AES-256-GCM, HMAC-SHA256, SHA-256, Argon2id, and CSPRNG
+- Master key rotation with `MASTER_KEY_ACTIVE_ID` + `MASTER_KEY_ACTIVE` and optional `MASTER_KEY_OLD`
+- `/api/v2` endpoints with 256-bit AccountNumber (43 chars, Base64URL) and AAD v2 (full SHA-256 user tag)
+- Zero-trust request handling with strict validation and generic client errors
+
 ### Key Features
 
 **Security:**
-- AccountNumber-only authentication (192-bit entropy, Base64URL, 32 characters)
+- AccountNumber-only authentication (256-bit/43 chars)
 - AES-256-GCM encryption (title and tags encrypted)
 - AAD (Additional Authenticated Data) for cross-user data swap protection
 - Per-user encryption keys (unique key per user)
@@ -31,6 +45,7 @@ This application is a todo management system that authenticates using only crypt
 - Rate limiting (IP-based, for login/register)
 - Log masking (AccountNumber and sensitive information masked)
 - Session storage (tokens in sessionStorage instead of localStorage)
+- Trusted proxy-aware client IP extraction for security decisions
 
 **Functional:**
 - Todo CRUD operations
@@ -106,12 +121,12 @@ This application is a todo management system that authenticates using only crypt
 
 ### AccountNumber Generation
 
-AccountNumber is generated with 192-bit cryptographic security:
+AccountNumber is generated with CSPRNG and Base64URL (no padding):
 
-1. `crypto/rand.Read(24 bytes)` → 192-bit entropy
-2. `base64.RawURLEncoding.EncodeToString()` → 32 characters Base64URL
-3. Result: 32 characters (A-Z, a-z, 0-9, -, _)
-4. Example: "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq"
+**Current (v2):**
+1. `OpenSSL RAND_bytes(32 bytes)` → 256-bit entropy
+2. `base64.RawURLEncoding.EncodeToString()` → 43 characters Base64URL
+3. Result: 43 characters (A-Z, a-z, 0-9, -, _)
 
 ### AccountNumber Storage in Database
 
@@ -136,23 +151,23 @@ AccountNumber: "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq"
     │
     ▼
 Argon2id(AccountNumber)
-  ├── Memory: 64MB
-  ├── Time: 3
-  ├── Parallelism: 2
-  └── Format: "$argon2id$v=19$m=67108864,t=3,p=2$salt$hash"
+  ├── Memory: ARGON2_MEMORY_KIB
+  ├── Time: ARGON2_TIME
+  ├── Parallelism: ARGON2_PARALLELISM
+  └── Format: "$argon2id$v=19$m=<memory>,t=<time>,p=<parallelism>$salt$hash"
     │
     ▼
-account_hash: "$argon2id$v=19$m=67108864,t=3,p=2$..." (stored)
+account_hash: "$argon2id$v=19$m=<memory>,t=<time>,p=<parallelism>$..." (stored)
   ├── Verification only
   └── Cannot reverse
 ```
 
 ### Rate Limiting
 
-Token Bucket algorithm is used:
-- Capacity: 20 requests
-- Refill rate: 1 request/second
-- Applied to: `/api/v1/login`, `/api/v1/register`
+Token Bucket algorithm is used (config-driven):
+- Capacity: `RATE_LIMIT_MAX_TOKENS`
+- Refill rate: `RATE_LIMIT_REFILL_INTERVAL_SEC`
+- Applied to: `/api/v2/login`, `/api/v2/register`
 - IP-based tracking
 - Response: `429 Too Many Requests`
 
@@ -175,21 +190,24 @@ Log output: "****************************ATTDq"
 
 Data encryption uses a multi-layer approach:
 
-1. **Master Key** (`ENCRYPTION_KEY`): 32-byte hex encoded AES key stored in environment variables, used to encrypt/decrypt user-specific keys
+1. **Master Key** (`MASTER_KEY_ACTIVE` + `MASTER_KEY_ACTIVE_ID`): 32-byte AES key stored in environment variables, used to encrypt/decrypt user-specific keys (old keys in `MASTER_KEY_OLD`)
 2. **User-Specific AES Key**: 32-byte AES-256 key per user, encrypted with master key and stored in `users.encrypted_key`
-3. **AAD (Additional Authenticated Data)**: 39-byte structure that prevents cross-user data swap attacks
+3. **AAD (Additional Authenticated Data)**: v2 55-byte structure that prevents cross-user data swap attacks
 4. **Data Encryption**: AES-256-GCM encryption with 12-byte nonce per encryption
 
-### AAD Structure (39 bytes)
+### AAD Structure
 
 AAD (Additional Authenticated Data) is used to prevent cross-user data swap attacks:
 
+**v2 (55 bytes):**
+`MAGIC(4) || VER(1) || USER_TAG(32) || TODO_ID(16) || FIELD(1) || PURPOSE(1)`
+
 ```
-┌────────┬─────┬──────────────┬──────────────┬───────┬─────────┐
-│ MAGIC  │ VER │  USER_TAG    │   TODO_ID    │ FIELD │ PURPOSE │
-│ "PXAD" │ 0x01│ SHA256[:16]  │  UUID (16B)  │ 1-3   │   1     │
-│ 4 byte │ 1B  │   16 byte    │   16 byte    │  1B   │   1B    │
-└────────┴─────┴──────────────┴──────────────┴───────┴─────────┘
+┌────────┬─────┬────────────────────────┬──────────────┬───────┬─────────┐
+│ MAGIC  │ VER │        USER_TAG        │   TODO_ID    │ FIELD │ PURPOSE │
+│ "PXAD" │ 0x02│ SHA256(userUUID, 32B)  │  UUID (16B)  │ 1-3   │   1     │
+│ 4 byte │ 1B  │         32 byte        │   16 byte    │  1B   │   1B    │
+└────────┴─────┴────────────────────────┴──────────────┴───────┴─────────┘
 
 FIELD: 0x01=Title, 0x02=Content, 0x03=Tags
 PURPOSE: 0x01=Encryption
@@ -212,49 +230,91 @@ PURPOSE: 0x01=Encryption
 
 - Docker & Docker Compose
 - Go 1.21+ (for development)
-- OpenSSL (for setup.sh)
+- OpenSSL >= 3.2.0 (for setup.sh and OpenSSL-based crypto)
+- OpenSSL 3.2 dev headers + pkg-config (for local builds/tests)
 
 ### Quick Start
 
 ```bash
-# Setup and build (automatically creates .env, then builds and tests)
-./setup.sh && ./build.sh --clean
+# Configure .env values, generate secrets, then build/test
+./setup.sh
+./build.sh --clean
 ```
 
 ### Environment Variables
 
-`setup.sh` automatically creates the following environment variables:
+`setup.sh` generates secrets and applies secure defaults for non-secret values (override in `.env`).
 
-| Variable | Description | Production |
-|----------|-------------|------------|
-| `ENCRYPTION_KEY` | 32-byte hex encoded AES key (master key) | `openssl rand -hex 32` |
-| `JWT_SECRET` | JWT signing key | `openssl rand -hex 32` |
-| `ACCOUNT_LOOKUP_PEPPER` | Pepper for HMAC lookup (>=32 bytes) | `openssl rand -hex 32` |
-| `JWT_EXPIRATION_MINUTES` | JWT token validity period | `15` (default) |
-| `ALLOWED_ORIGIN` | CORS allowed origins | `*` (dev) or specific domain |
-| `APP_ENV` | Environment mode | `development` or `production` |
-| `LOG_LEVEL` | Log level | `debug`, `info`, `warn`, `error` |
-| `DB_HOST` | PostgreSQL host | `postgres` (Docker) or `localhost` |
-| `DB_USER` | PostgreSQL user | `postgres` |
-| `DB_PASSWORD` | PostgreSQL password | `postgres` |
-| `DB_NAME` | Database name | `todos` |
-| `DB_PORT` | PostgreSQL port | `5432` |
-| `DB_SSL_MODE` | SSL mode | `disable` (dev) or `require` (prod) |
-| `BACKEND_PORT` | Backend server port | `8080` |
+| Variable | Description | Default | Notes |
+|----------|-------------|---------|-------|
+| `JWT_SECRET` | JWT signing key | Generated | 32+ chars (OpenSSL rand recommended) |
+| `JWT_SECRET_MIN_LEN` | Minimum JWT secret length | `32` | Integer |
+| `JWT_ISSUER` | JWT issuer | `todo-app-backend` | Override for your environment |
+| `JWT_AUDIENCE` | JWT audience | `todo-app-frontend` | Override for your environment |
+| `JWT_EXPIRATION_MINUTES` | JWT token validity period | `15` | Integer |
+| `MASTER_KEY_ACTIVE_ID` | Active master key ID | Generated | Required |
+| `MASTER_KEY_ACTIVE` | Active master key | Generated | 32 bytes hex or raw |
+| `MASTER_KEY_OLD` | Optional old keys | Empty | `kid:hex` comma-separated |
+| `ACCOUNT_LOOKUP_PEPPER` | HMAC pepper for account lookup | Generated | >=32 bytes (hex/base64/raw) |
+| `ALLOWED_ORIGINS` | CORS allowed origins | `http://localhost` | Comma-separated; no `*` in prod |
+| `TRUSTED_PROXIES` | Trusted proxy IPs/CIDRs | Empty | Optional |
+| `DB_HOST` | PostgreSQL host | `localhost` | Override in production |
+| `DB_PORT` | PostgreSQL port | `5432` | Override in production |
+| `DB_USER` | PostgreSQL user | `postgres` | Override in production |
+| `DB_PASSWORD` | PostgreSQL password | `postgres` | Override in production |
+| `DB_NAME` | PostgreSQL database name | `todo_app` | Override in production |
+| `DB_SSL_MODE` | SSL mode | `disable` | Must not be `disable` in prod |
+| `BACKEND_PORT` | Backend server port | `8080` | Required |
+| `MAX_BASE64_LOGIN_LEN` | Base64 request size limit (login) | `4096` | Integer |
+| `MAX_BASE64_TODO_LEN` | Base64 request size limit (todo) | `65536` | Integer |
+| `MAX_REQUEST_BODY_BYTES` | HTTP request body size limit | `1048576` | Integer |
+| `MAX_JSON_DEPTH` | Max JSON nesting depth | `2` | Integer |
+| `MAX_TITLE_LENGTH` | Max todo title length | `1000` | Integer |
+| `MIN_TITLE_LENGTH` | Min todo title length | `1` | Integer |
+| `MAX_TAG_LENGTH` | Max tag length | `6` | Integer |
+| `MAX_TAGS_PER_TODO` | Max tags per todo | `10` | Integer |
+| `ARGON2_MEMORY_KIB` | Argon2 memory cost (KiB) | `65536` | Integer |
+| `ARGON2_TIME` | Argon2 time cost | `3` | Integer |
+| `ARGON2_PARALLELISM` | Argon2 parallelism | `2` | Integer |
+| `ARGON2_SALT_LENGTH` | Argon2 salt length (bytes) | `16` | Integer |
+| `ARGON2_HASH_LENGTH` | Argon2 hash length (bytes) | `32` | Integer |
+| `PENDING_TOKEN_TTL_SEC` | Pending token TTL (seconds) | `300` | Integer |
+| `PENDING_CLEANUP_INTERVAL_SEC` | Pending store cleanup interval | `60` | Integer |
+| `PENDING_ID_BYTES` | Pending ID size (bytes) | `16` | Integer |
+| `INTERNAL_ID_LENGTH` | Internal user ID length | `24` | Integer |
+| `RATE_LIMIT_MAX_TOKENS` | Rate limit bucket size | `20` | Integer |
+| `RATE_LIMIT_REFILL_INTERVAL_SEC` | Rate limit refill interval | `3` | Integer |
+| `RATE_LIMIT_CLEANUP_INTERVAL_SEC` | Rate limit cleanup interval | `300` | Integer |
+| `RATE_LIMIT_MAX_BUCKETS` | Rate limit bucket cap | `10000` | Integer |
+| `SERVER_READ_HEADER_TIMEOUT_SEC` | Server read header timeout | `5` | Integer |
+| `SERVER_READ_TIMEOUT_SEC` | Server read timeout | `15` | Integer |
+| `SERVER_WRITE_TIMEOUT_SEC` | Server write timeout | `15` | Integer |
+| `SERVER_IDLE_TIMEOUT_SEC` | Server idle timeout | `60` | Integer |
+| `SERVER_MAX_HEADER_BYTES` | Server max header bytes | `8192` | Integer |
+| `HSTS_MAX_AGE` | HSTS max-age (seconds) | `0` | Optional |
+| `HSTS_INCLUDE_SUBDOMAINS` | HSTS includeSubDomains | `false` | Optional |
+| `HSTS_PRELOAD` | HSTS preload | `false` | Optional |
+| `SEC_HEADER_COOP` | Cross-Origin-Opener-Policy | Empty | Optional |
+| `SEC_HEADER_CORP` | Cross-Origin-Resource-Policy | Empty | Optional |
+| `SEC_HEADER_COEP` | Cross-Origin-Embedder-Policy | Empty | Optional |
+| `APP_ENV` | Environment mode | `development` | `development` or `production` |
+| `LOG_LEVEL` | Log level | `info` | `debug`, `info`, `warn`, `error` |
+
+Note: Legacy `ENCRYPTION_KEY` fallback has been removed. Use `MASTER_KEY_ACTIVE` and optional `MASTER_KEY_OLD` for rotation and migration.
 
 ## API Reference
 
 ### JWT Authentication
-Protected endpoints require `Authorization: Bearer <token>` header. Token expires in 15 minutes.
+Protected endpoints require `Authorization: Bearer <token>` header. Token expiration is controlled by `JWT_EXPIRATION_MINUTES`.
 
 ### Endpoints
 
-- `POST /api/v1/register` - Generate AccountNumber (Phase 1) or create account (Phase 2)
-- `POST /api/v1/login` - Login with AccountNumber
-- `GET /api/v1/todos` - Get all todos (JWT required)
-- `POST /api/v1/todos` - Create todo (JWT required)
-- `PUT /api/v1/todos/{id}` - Update todo (JWT required)
-- `DELETE /api/v1/todos/{id}` - Delete todo (JWT required)
+- `POST /api/v2/register` - Generate AccountNumber (Phase 1) or create account (Phase 2)
+- `POST /api/v2/login` - Login with AccountNumber
+- `GET /api/v2/todos` - Get all todos (JWT required)
+- `POST /api/v2/todos` - Create todo (JWT required)
+- `PUT /api/v2/todos/{id}` - Update todo (JWT required)
+- `DELETE /api/v2/todos/{id}` - Delete todo (JWT required)
 
 ### Error Codes
 
@@ -290,10 +350,7 @@ Protected endpoints require `Authorization: Bearer <token>` header. Token expire
 - **Mullvad VPN**: AccountNumber-only authentication model
 - **OWASP**: Security best practices
 - **NIST**: Cryptographic standard's
-- **Go crypto/rand**: https://pkg.go.dev/crypto/rand
-- **Go crypto/aes**: https://pkg.go.dev/crypto/aes
-- **Go crypto/hmac**: https://pkg.go.dev/crypto/hmac
-- **golang.org/x/crypto/argon2**: https://pkg.go.dev/golang.org/x/crypto/argon2
+- **OpenSSL 3**: https://www.openssl.org/docs/man3.0/
 - **github.com/golang-jwt/jwt/v5**: https://pkg.go.dev/github.com/golang-jwt/jwt/v5
 - **github.com/google/uuid**: https://pkg.go.dev/github.com/google/uuid
 - **gorm.io/driver/postgres**: https://pkg.go.dev/gorm.io/driver/postgres

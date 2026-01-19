@@ -6,16 +6,16 @@
 backend/tests/
 ├── auth/                      # Authentication tests (15 test)
 ├── database/                   # Migration tests (7 test) ⭐ YENİ
-├── encryption/                 # Encryption tests (7 test)
+├── encryption/                 # Encryption tests (10 test)
 ├── handlers/                    # Handler tests (2 test)
-├── integration/                # Integration tests (5 test)
-├── middleware/                 # Middleware tests (15 test)
+├── integration/                # Integration tests (20 test)
+├── middleware/                 # Middleware tests (17 test)
 ├── testutil/                   # Test utilities
 │   ├── db.go                  # Database setup helpers
 │   ├── db_helper.go           # Database env setup ⭐ YENİ
 │   └── env.go                 # Environment setup
-├── todo/                       # Todo service tests (6 test)
-└── utils/                      # Utils tests (3 test)
+├── todo/                       # Todo service tests (7 test)
+└── utils/                      # Utils tests (17 test)
 ```
 
 ## 🚀 Test Çalıştırma Sırası
@@ -74,13 +74,13 @@ go test ./tests/utils -v
 |----------|-------------|-------|
 | **Database Migration** | **7** | ⭐ YENİ |
 | Authentication | 15 | ✅ |
-| Encryption | 7 | ✅ |
-| Middleware | 15 | ✅ |
-| Todo Service | 6 | ✅ |
-| Integration | 5 | ⚠️ (2 skip) |
+| Encryption | 10 | ✅ |
+| Middleware | 17 | ✅ |
+| Todo Service | 7 | ✅ |
+| Integration | 20 | ✅ |
 | Handlers | 2 | ✅ |
-| Utils | 3 | ✅ |
-| **TOPLAM** | **60** | **✅ 58 PASS, 2 SKIP** |
+| Utils | 17 | ✅ |
+| **TOPLAM** | **95** | ✅ |
 
 ## 🗄️ Migration Testleri
 
@@ -101,7 +101,7 @@ Migration testleri backend başlamadan önce:
 - `TestUserTableIndexes`: Index'leri test eder
 - `TestDatabaseConstraints`: Constraint'leri test eder
 - `TestDatabaseConnection`: Bağlantıyı test eder
-- `TestDatabaseEncryptionKey`: Encryption key'i test eder
+- `TestDatabaseMasterKey`: Master key'i test eder
 
 ### Detaylı Bilgi
 
@@ -180,7 +180,15 @@ Bazı testler database bağlantısı gerektirir:
 
 Testler için gerekli environment variables:
 - `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSL_MODE`
-- `JWT_SECRET`, `ENCRYPTION_KEY`, `ACCOUNT_LOOKUP_PEPPER`
+- `JWT_SECRET`, `JWT_SECRET_MIN_LEN`, `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_EXPIRATION_MINUTES`
+- `MASTER_KEY_ACTIVE`, `MASTER_KEY_ACTIVE_ID`, `MASTER_KEY_OLD`, `ACCOUNT_LOOKUP_PEPPER`
+- `ALLOWED_ORIGINS`, `BACKEND_PORT`, `APP_ENV`, `LOG_LEVEL`
+- `MAX_BASE64_LOGIN_LEN`, `MAX_BASE64_TODO_LEN`, `MAX_REQUEST_BODY_BYTES`, `MAX_JSON_DEPTH`
+- `MAX_TITLE_LENGTH`, `MIN_TITLE_LENGTH`, `MAX_TAG_LENGTH`, `MAX_TAGS_PER_TODO`
+- `ARGON2_MEMORY_KIB`, `ARGON2_TIME`, `ARGON2_PARALLELISM`, `ARGON2_SALT_LENGTH`, `ARGON2_HASH_LENGTH`
+- `PENDING_TOKEN_TTL_SEC`, `PENDING_CLEANUP_INTERVAL_SEC`, `PENDING_ID_BYTES`, `INTERNAL_ID_LENGTH`
+- `RATE_LIMIT_MAX_TOKENS`, `RATE_LIMIT_REFILL_INTERVAL_SEC`, `RATE_LIMIT_CLEANUP_INTERVAL_SEC`, `RATE_LIMIT_MAX_BUCKETS`
+- `SERVER_READ_HEADER_TIMEOUT_SEC`, `SERVER_READ_TIMEOUT_SEC`, `SERVER_WRITE_TIMEOUT_SEC`, `SERVER_IDLE_TIMEOUT_SEC`, `SERVER_MAX_HEADER_BYTES`
 
 ## 📚 Dokümantasyon
 

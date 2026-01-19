@@ -11,12 +11,12 @@ var contentTypeLogger = utils.NewLogger("CONTENT_TYPE")
 
 // ContentTypeMiddleware validates Content-Type header based on endpoint and HTTP method.
 // Currently the backend exposes:
-//   - POST /api/v1/register  (JSON body, but Phase 1 allows empty body without Content-Type)
-//   - POST /api/v1/login     (JSON body, Content-Type: application/json)
-//   - GET  /api/v1/todos     (no body)
-//   - POST /api/v1/todos     (JSON body, Content-Type: application/json)
-//   - PUT  /api/v1/todos/:id (JSON body, Content-Type: application/json)
-//   - DELETE /api/v1/todos/:id (no body)
+//   - POST /api/v2/register  (JSON body, but Phase 1 allows empty body without Content-Type)
+//   - POST /api/v2/login     (JSON body, Content-Type: application/json)
+//   - GET  /api/v2/todos     (no body)
+//   - POST /api/v2/todos     (JSON body, Content-Type: application/json)
+//   - PUT  /api/v2/todos/:id (JSON body, Content-Type: application/json)
+//   - DELETE /api/v2/todos/:id (no body)
 //
 // For diğer path/method kombinasyonları şu an whitelist uygulanmaz; böylece sistemi
 // bozmadan gelecekteki endpoint eklemeleri için esnek kalır.
@@ -38,25 +38,25 @@ func ContentTypeMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		allowEmptyBodyWithoutContentType := false
 
 		switch {
-		// POST /api/v1/register
+		// POST /api/v2/register
 		// Phase 1'de body tamamen boş olabiliyor (AccountNumber preview),
 		// bu durumda Content-Type header'ı zorunlu değil.
-		case path == "/api/v1/register" && method == http.MethodPost:
+		case path == "/api/v2/register" && method == http.MethodPost:
 			requireJSON = true
 			if r.ContentLength == 0 {
 				allowEmptyBodyWithoutContentType = true
 			}
 
-		// POST /api/v1/login (her zaman JSON body bekleniyor)
-		case path == "/api/v1/login" && method == http.MethodPost:
+		// POST /api/v2/login (her zaman JSON body bekleniyor)
+		case path == "/api/v2/login" && method == http.MethodPost:
 			requireJSON = true
 
-		// POST /api/v1/todos (JSON body)
-		case path == "/api/v1/todos" && method == http.MethodPost:
+		// POST /api/v2/todos (JSON body)
+		case path == "/api/v2/todos" && method == http.MethodPost:
 			requireJSON = true
 
-		// PUT /api/v1/todos/:id (JSON body)
-		case strings.HasPrefix(path, "/api/v1/todos/") && method == http.MethodPut:
+		// PUT /api/v2/todos/:id (JSON body)
+		case strings.HasPrefix(path, "/api/v2/todos/") && method == http.MethodPut:
 			requireJSON = true
 
 		// Diğer path/method kombinasyonları için şu an Content-Type whitelist uygulanmıyor.

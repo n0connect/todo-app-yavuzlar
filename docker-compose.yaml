@@ -3,9 +3,9 @@ services:
     image: postgres:15-alpine
     container_name: todo-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: todos
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     ports:
       - "5432:5432"
     volumes:
@@ -22,21 +22,52 @@ services:
       dockerfile: dev.backend.Dockerfile
     container_name: todo-backend
     environment:
-      ALLOWED_ORIGINS: http://localhost,http://127.0.0.1
-      DB_HOST: postgres
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: todos
-      DB_PORT: 5432
-      DB_SSL_MODE: disable
-      BACKEND_PORT: 8080
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES}
+      DB_HOST: ${DB_HOST}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_PORT: ${DB_PORT}
+      DB_SSL_MODE: ${DB_SSL_MODE}
+      BACKEND_PORT: ${BACKEND_PORT}
+      MASTER_KEY_ACTIVE: ${MASTER_KEY_ACTIVE}
+      MASTER_KEY_ACTIVE_ID: ${MASTER_KEY_ACTIVE_ID}
+      MASTER_KEY_OLD: ${MASTER_KEY_OLD}
       JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET_MIN_LEN: ${JWT_SECRET_MIN_LEN}
+      JWT_ISSUER: ${JWT_ISSUER}
+      JWT_AUDIENCE: ${JWT_AUDIENCE}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES}
       ACCOUNT_LOOKUP_PEPPER: ${ACCOUNT_LOOKUP_PEPPER}
-      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-15}
-      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-*}
-      APP_ENV: ${APP_ENV:-development}
-      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      MAX_BASE64_LOGIN_LEN: ${MAX_BASE64_LOGIN_LEN}
+      MAX_BASE64_TODO_LEN: ${MAX_BASE64_TODO_LEN}
+      MAX_REQUEST_BODY_BYTES: ${MAX_REQUEST_BODY_BYTES}
+      MAX_JSON_DEPTH: ${MAX_JSON_DEPTH}
+      MAX_TITLE_LENGTH: ${MAX_TITLE_LENGTH}
+      MIN_TITLE_LENGTH: ${MIN_TITLE_LENGTH}
+      MAX_TAG_LENGTH: ${MAX_TAG_LENGTH}
+      MAX_TAGS_PER_TODO: ${MAX_TAGS_PER_TODO}
+      ARGON2_MEMORY_KIB: ${ARGON2_MEMORY_KIB}
+      ARGON2_TIME: ${ARGON2_TIME}
+      ARGON2_PARALLELISM: ${ARGON2_PARALLELISM}
+      ARGON2_SALT_LENGTH: ${ARGON2_SALT_LENGTH}
+      ARGON2_HASH_LENGTH: ${ARGON2_HASH_LENGTH}
+      PENDING_TOKEN_TTL_SEC: ${PENDING_TOKEN_TTL_SEC}
+      PENDING_CLEANUP_INTERVAL_SEC: ${PENDING_CLEANUP_INTERVAL_SEC}
+      PENDING_ID_BYTES: ${PENDING_ID_BYTES}
+      INTERNAL_ID_LENGTH: ${INTERNAL_ID_LENGTH}
+      RATE_LIMIT_MAX_TOKENS: ${RATE_LIMIT_MAX_TOKENS}
+      RATE_LIMIT_REFILL_INTERVAL_SEC: ${RATE_LIMIT_REFILL_INTERVAL_SEC}
+      RATE_LIMIT_CLEANUP_INTERVAL_SEC: ${RATE_LIMIT_CLEANUP_INTERVAL_SEC}
+      RATE_LIMIT_MAX_BUCKETS: ${RATE_LIMIT_MAX_BUCKETS}
+      SERVER_READ_HEADER_TIMEOUT_SEC: ${SERVER_READ_HEADER_TIMEOUT_SEC}
+      SERVER_READ_TIMEOUT_SEC: ${SERVER_READ_TIMEOUT_SEC}
+      SERVER_WRITE_TIMEOUT_SEC: ${SERVER_WRITE_TIMEOUT_SEC}
+      SERVER_IDLE_TIMEOUT_SEC: ${SERVER_IDLE_TIMEOUT_SEC}
+      SERVER_MAX_HEADER_BYTES: ${SERVER_MAX_HEADER_BYTES}
+      APP_ENV: ${APP_ENV}
+      LOG_LEVEL: ${LOG_LEVEL}
     ports:
       - "8080:8080"
     depends_on:
@@ -44,7 +75,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/api/v1/register || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/api/v2/register || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

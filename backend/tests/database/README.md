@@ -59,7 +59,7 @@ go run ./cmd/server
 
 - `TestDatabaseMigration`: Migration'ların başarıyla çalıştığını test eder
 - `TestDatabaseConnection`: Database bağlantısını test eder
-- `TestDatabaseEncryptionKey`: Encryption key'in initialize edildiğini test eder
+- `TestDatabaseMasterKey`: Master key'in initialize edildiğini test eder
 
 ### 2. Schema Tests
 

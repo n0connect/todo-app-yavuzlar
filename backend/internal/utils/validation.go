@@ -1,20 +1,17 @@
 package utils
 
 import (
-	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"todo-app-backend/internal/config"
+	"todo-app-backend/internal/cryptoengine"
 )
 
 var validationLogger = NewLogger("VALIDATION")
-
-const (
-	MaxTitleLength = 1000
-	MinTitleLength = 1
-)
 
 // ========================================
 // INPUT VALIDATION - OUTPUT ENCODING APPROACH
@@ -25,45 +22,89 @@ const (
 // This allows emojis, special chars, any Unicode text
 
 var (
-	// UUID: Only alphanumeric, exactly 24 characters (kept for backward compatibility)
-	uuidPattern = regexp.MustCompile(`^[a-zA-Z0-9]{24}$`)
-
-	// AccountNumber: Base64URL (no padding) - 32 characters for 24 bytes (192-bit)
+	// AccountNumber: Base64URL (no padding) - length derived from byte size
 	// Base64URL uses A-Z, a-z, 0-9, _, - (RFC 4648 Section 5)
-	accountNumberPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{32}$`)
+	accountNumberBytes   = 32
+	accountNumberLength  = base64.RawURLEncoding.EncodedLen(accountNumberBytes)
+	accountNumberPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 	// Base64: Only valid base64 characters
 	base64Pattern = regexp.MustCompile(`^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$`)
-
-	// Tag: Only alphanumeric characters (A-Z, a-z, 0-9), maximum 6 characters
-	tagPattern = regexp.MustCompile(`^[a-zA-Z0-9]{1,6}$`)
 )
 
+func internalIDLength() (int, error) {
+	length := config.GetInternalIDLength()
+	if length <= 0 {
+		return 0, fmt.Errorf("INTERNAL_ID_LENGTH not configured")
+	}
+	return length, nil
+}
+
+func titleLimits() (int, int, error) {
+	minLen := config.GetMinTitleLength()
+	maxLen := config.GetMaxTitleLength()
+	if minLen <= 0 || maxLen <= 0 || minLen > maxLen {
+		return 0, 0, fmt.Errorf("invalid title length configuration")
+	}
+	return minLen, maxLen, nil
+}
+
+func maxTagLength() (int, error) {
+	maxLen := config.GetMaxTagLength()
+	if maxLen <= 0 {
+		return 0, fmt.Errorf("MAX_TAG_LENGTH not configured")
+	}
+	return maxLen, nil
+}
+
+// GetMaxTagsPerTodo returns max tags per todo from config.
+func GetMaxTagsPerTodo() (int, error) {
+	maxTags := config.GetMaxTagsPerTodo()
+	if maxTags <= 0 {
+		return 0, fmt.Errorf("MAX_TAGS_PER_TODO not configured")
+	}
+	return maxTags, nil
+}
+
 func ValidateUUID(uuid string) bool {
-	if len(uuid) != 24 {
+	length, err := internalIDLength()
+	if err != nil {
+		validationLogger.LogError("ValidateUUID", err)
 		return false
 	}
-	return uuidPattern.MatchString(uuid)
+	if len(uuid) != length {
+		return false
+	}
+	for i := 0; i < len(uuid); i++ {
+		if !isAlphaNumeric(uuid[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func GenerateInternalID() (string, error) {
-	// Use 24 bytes for better entropy distribution
-	randomBytes := make([]byte, 24)
-	if _, err := rand.Read(randomBytes); err != nil {
+	length, err := internalIDLength()
+	if err != nil {
+		return "", err
+	}
+
+	randomBytes, err := cryptoengine.RandomBytes(length)
+	if err != nil {
 		return "", fmt.Errorf("failed to generate random bytes: %w", err)
 	}
 
 	// 62 characters: A-Z, a-z, 0-9
 	alphanumeric := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-	result := make([]byte, 24)
+	result := make([]byte, length)
 
-	for i := 0; i < 24; i++ {
+	for i := 0; i < length; i++ {
 		// Rejection sampling for uniform distribution
 		// 256 % 62 = 8, reject values >= 248 to avoid bias
 		b := randomBytes[i]
 		for b >= 248 {
-			extraByte := make([]byte, 1)
-			if _, err := rand.Read(extraByte); err != nil {
+			extraByte, err := cryptoengine.RandomBytes(1)
+			if err != nil {
 				return "", fmt.Errorf("failed to generate random bytes: %w", err)
 			}
 			b = extraByte[0]
@@ -71,32 +112,30 @@ func GenerateInternalID() (string, error) {
 		result[i] = alphanumeric[b%62]
 	}
 
-	validationLogger.Debug("GenerateInternalID: generated 24-char alphanumeric UUID with CSPRNG")
+	validationLogger.Debug("GenerateInternalID: generated alphanumeric UUID with CSPRNG, length=%d", length)
 	return string(result), nil
 }
 
-// GenerateAccountNumber generates a 192-bit (24 bytes) CSPRNG account number
-// Returns base64url-encoded string (32 characters, no padding)
-// Encoding: 24 bytes (192 bits) -> base64.RawURLEncoding -> 32 characters (192 bits)
+// GenerateAccountNumber generates a 256-bit (32 bytes) CSPRNG account number
+// Returns base64url-encoded string (43 characters, no padding)
 func GenerateAccountNumber() (string, error) {
-	// Generate exactly 24 bytes (192 bits) of CSPRNG
-	randomBytes := make([]byte, 24)
-	if _, err := rand.Read(randomBytes); err != nil {
+	// Generate exactly 32 bytes (256 bits) of CSPRNG
+	randomBytes, err := cryptoengine.RandomBytes(accountNumberBytes)
+	if err != nil {
 		return "", fmt.Errorf("failed to generate random bytes: %w", err)
 	}
 
 	// Base64URL encoding (RFC 4648 Section 5, no padding)
-	// 24 bytes = 192 bits -> base64url = 32 characters (192 bits preserved)
 	encoded := base64.RawURLEncoding.EncodeToString(randomBytes)
 
-	validationLogger.Debug("GenerateAccountNumber: generated 32-char base64url account number (192-bit CSPRNG)")
+	validationLogger.Debug("GenerateAccountNumber: generated 43-char base64url account number (256-bit CSPRNG)")
 	return encoded, nil
 }
 
 // ValidateAccountNumber validates account number format
-// Must be exactly 32 base64url characters (A-Z, a-z, 0-9, _, -)
+// Must be exactly 43 base64url characters (A-Z, a-z, 0-9, _, -)
 func ValidateAccountNumber(accountNumber string) bool {
-	if len(accountNumber) != 32 {
+	if len(accountNumber) != accountNumberLength {
 		return false
 	}
 	return accountNumberPattern.MatchString(accountNumber)
@@ -117,6 +156,11 @@ func MaskAccountNumber(accountNumber string) string {
 // Rejects: Only invalid UTF-8, null bytes, empty strings, and excessive length
 func ValidateTitle(title string) (string, error) {
 	validationLogger.Debug("ValidateTitle: validating input, length: %d", len(title))
+
+	minLen, maxLen, err := titleLimits()
+	if err != nil {
+		return "", err
+	}
 
 	// Step 1: Check for null bytes (security)
 	if strings.Contains(title, "\x00") {
@@ -140,14 +184,14 @@ func ValidateTitle(title string) (string, error) {
 
 	// Step 4: Check length (in runes, not bytes - for Unicode support)
 	runeCount := utf8.RuneCountInString(title)
-	if runeCount < MinTitleLength {
+	if runeCount < minLen {
 		return "", fmt.Errorf("title too short")
 	}
-	if runeCount > MaxTitleLength {
+	if runeCount > maxLen {
 		// Truncate to max length
 		runes := []rune(title)
-		title = string(runes[:MaxTitleLength])
-		validationLogger.Debug("ValidateTitle: truncated to %d characters", MaxTitleLength)
+		title = string(runes[:maxLen])
+		validationLogger.Debug("ValidateTitle: truncated to %d characters", maxLen)
 	}
 
 	validationLogger.Debug("ValidateTitle: validation passed, final length: %d runes", utf8.RuneCountInString(title))
@@ -177,6 +221,11 @@ func ValidateBase64Data(data string, maxLen int) error {
 func ValidateTag(tag string) (string, error) {
 	validationLogger.Debug("ValidateTag: validating input, length: %d", len(tag))
 
+	maxLen, err := maxTagLength()
+	if err != nil {
+		return "", err
+	}
+
 	// Step 1: Trim whitespace
 	tag = strings.TrimSpace(tag)
 
@@ -187,17 +236,27 @@ func ValidateTag(tag string) (string, error) {
 	}
 
 	// Step 3: Check length (in bytes, since we only allow ASCII)
-	if len(tag) > 6 {
+	if len(tag) > maxLen {
 		validationLogger.Warn("ValidateTag: tag too long, length: %d", len(tag))
-		return "", fmt.Errorf("tag too long (maximum 6 characters)")
+		return "", fmt.Errorf("tag too long (maximum %d characters)", maxLen)
 	}
 
 	// Step 4: Validate format - only alphanumeric characters
-	if !tagPattern.MatchString(tag) {
+	for i := 0; i < len(tag); i++ {
+		if !isAlphaNumeric(tag[i]) {
+			validationLogger.Warn("ValidateTag: invalid tag format")
+			return "", fmt.Errorf("invalid tag format (only letters and numbers allowed)")
+		}
+	}
+	if tag == "" {
 		validationLogger.Warn("ValidateTag: invalid tag format")
 		return "", fmt.Errorf("invalid tag format (only letters and numbers allowed)")
 	}
 
 	validationLogger.Debug("ValidateTag: validation passed, tag: %s", tag)
 	return tag, nil
+}
+
+func isAlphaNumeric(b byte) bool {
+	return (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
 }

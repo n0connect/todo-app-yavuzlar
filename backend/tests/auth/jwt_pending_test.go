@@ -1,24 +1,23 @@
 package auth
 
 import (
-	"os"
+	"strings"
 	"testing"
 
 	"todo-app-backend/internal/auth"
+	"todo-app-backend/tests/testutil"
 )
 
+func setupPendingJWTEnv(t *testing.T) {
+	t.Helper()
+	testutil.SetupTestEnv(t)
+	t.Cleanup(func() {
+		testutil.TeardownTestEnv(t)
+	})
+}
+
 func TestSignPendingRegistrationToken_ContainsPendingID(t *testing.T) {
-	// Set JWT secret for testing
-	originalSecret := os.Getenv("JWT_SECRET")
-	testSecret := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" // 64 chars
-	os.Setenv("JWT_SECRET", testSecret)
-	defer func() {
-		if originalSecret != "" {
-			os.Setenv("JWT_SECRET", originalSecret)
-		} else {
-			os.Unsetenv("JWT_SECRET")
-		}
-	}()
+	setupPendingJWTEnv(t)
 
 	// Generate pending ID
 	pendingID, err := auth.GeneratePendingID()
@@ -27,8 +26,10 @@ func TestSignPendingRegistrationToken_ContainsPendingID(t *testing.T) {
 	}
 
 	// Store AccountNumber server-side
-	accountNumber := "ABCDEFGHIJKLMNOPQRSTUVWXYZab12"
-	auth.StorePendingRegistration(pendingID, accountNumber)
+	accountNumber := strings.Repeat("A", 43)
+	if err := auth.StorePendingRegistration(pendingID, accountNumber); err != nil {
+		t.Fatalf("StorePendingRegistration() failed: %v", err)
+	}
 
 	// Sign token with pending ID (not AccountNumber)
 	token, err := auth.SignPendingRegistrationToken(pendingID)
@@ -58,25 +59,17 @@ func TestSignPendingRegistrationToken_ContainsPendingID(t *testing.T) {
 }
 
 func TestSignPendingRegistrationToken_NoAccountNumberInToken(t *testing.T) {
-	// Set JWT secret for testing
-	originalSecret := os.Getenv("JWT_SECRET")
-	testSecret := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	os.Setenv("JWT_SECRET", testSecret)
-	defer func() {
-		if originalSecret != "" {
-			os.Setenv("JWT_SECRET", originalSecret)
-		} else {
-			os.Unsetenv("JWT_SECRET")
-		}
-	}()
+	setupPendingJWTEnv(t)
 
 	pendingID, err := auth.GeneratePendingID()
 	if err != nil {
 		t.Fatalf("GeneratePendingID() failed: %v", err)
 	}
 
-	accountNumber := "ABCDEFGHIJKLMNOPQRSTUVWXYZab12"
-	auth.StorePendingRegistration(pendingID, accountNumber)
+	accountNumber := strings.Repeat("A", 43)
+	if err := auth.StorePendingRegistration(pendingID, accountNumber); err != nil {
+		t.Fatalf("StorePendingRegistration() failed: %v", err)
+	}
 
 	token, err := auth.SignPendingRegistrationToken(pendingID)
 	if err != nil {
@@ -100,19 +93,9 @@ func TestSignPendingRegistrationToken_NoAccountNumberInToken(t *testing.T) {
 }
 
 func TestVerifyPendingRegistrationToken_Expired(t *testing.T) {
-	// Set JWT secret for testing
-	originalSecret := os.Getenv("JWT_SECRET")
-	testSecret := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	os.Setenv("JWT_SECRET", testSecret)
-	defer func() {
-		if originalSecret != "" {
-			os.Setenv("JWT_SECRET", originalSecret)
-		} else {
-			os.Unsetenv("JWT_SECRET")
-		}
-	}()
+	setupPendingJWTEnv(t)
 
-	// This test would require manipulating JWT expiration or waiting 5+ minutes
+	// This test would require manipulating JWT expiration or waiting for configured TTL
 	// For now, we test that invalid tokens are rejected
 	invalidToken := "invalid.token.here"
 
@@ -123,17 +106,7 @@ func TestVerifyPendingRegistrationToken_Expired(t *testing.T) {
 }
 
 func TestVerifyPendingRegistrationToken_InvalidPendingID(t *testing.T) {
-	// Set JWT secret for testing
-	originalSecret := os.Getenv("JWT_SECRET")
-	testSecret := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	os.Setenv("JWT_SECRET", testSecret)
-	defer func() {
-		if originalSecret != "" {
-			os.Setenv("JWT_SECRET", originalSecret)
-		} else {
-			os.Unsetenv("JWT_SECRET")
-		}
-	}()
+	setupPendingJWTEnv(t)
 
 	// Create token with pending ID that doesn't exist in store
 	nonExistentPendingID, err := auth.GeneratePendingID()
