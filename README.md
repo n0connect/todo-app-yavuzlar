@@ -43,6 +43,7 @@ This application is a todo management system that authenticates using only crypt
 - Per-user encryption keys (unique key per user)
 - Zero plaintext storage (AccountNumber never stored in plaintext in database)
 - Rate limiting (IP-based, for login/register)
+- Proof of Work (PoW) for registration endpoint protection
 - Log masking (AccountNumber and sensitive information masked)
 - Session storage (tokens in sessionStorage instead of localStorage)
 - Trusted proxy-aware client IP extraction for security decisions
@@ -194,6 +195,41 @@ Data encryption uses a multi-layer approach:
 2. **User-Specific AES Key**: 32-byte AES-256 key per user, encrypted with master key and stored in `users.encrypted_key`
 3. **AAD (Additional Authenticated Data)**: v2 55-byte structure that prevents cross-user data swap attacks
 4. **Data Encryption**: AES-256-GCM encryption with 12-byte nonce per encryption
+
+### Proof of Work (PoW) Protection
+
+To prevent DoS attacks against the expensive Argon2id hashing function during registration, the system implements a Proof of Work (PoW) mechanism:
+
+**Architecture:**
+- PoW challenge endpoint: `/api/v2/pow/challenge` (GET request)
+- PoW solution required for Phase 1 of registration (`/api/v2/register` with `confirm: false`)
+- PoW solution also required for Phase 2 of registration (`/api/v2/register` with `confirm: true`)
+- Client-side computation using Web Workers to prevent UI blocking
+
+**Security Features:**
+- OpenSSL-backed SHA256 for PoW validation
+- Single-use challenge enforcement (each challenge can only be used once)
+- IP-based rate limiting (1 challenge per 5 minutes per IP)
+- Time-bound challenges with TTL (300 seconds)
+- Memory leak protection with automatic cleanup
+- Race condition prevention with atomic validation
+- Comprehensive metrics and monitoring
+- Configurable difficulty (default: 22 leading zero bits)
+
+**Workflow:**
+1. Client requests PoW challenge from `/api/v2/pow/challenge`
+2. Client solves PoW challenge using Web Worker (computes nonce that produces hash with N leading zeros)
+3. Client includes PoW solution in registration request
+4. Server validates PoW solution before proceeding with expensive operations
+
+**Monitoring:**
+- Metrics endpoint: `/api/v2/pow/metrics` (GET request)
+- Tracks challenges issued, validated, rejected, replay attempts, and rate limit hits
+
+**Configuration:**
+- `POW_DIFFICULTY`: Configurable difficulty level (default: 22 leading zero bits)
+- Challenges expire after 5 minutes
+- Rate limited to 1 challenge per 5 minutes per IP
 
 ### AAD Structure
 

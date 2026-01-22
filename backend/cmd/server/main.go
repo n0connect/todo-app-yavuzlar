@@ -8,6 +8,7 @@ import (
 	"todo-app-backend/internal/database"
 	"todo-app-backend/internal/handlers"
 	"todo-app-backend/internal/middleware"
+	"todo-app-backend/internal/pow"
 	"todo-app-backend/internal/utils"
 )
 
@@ -30,6 +31,10 @@ func main() {
 		log.Fatalf("Configuration error: %v", err)
 	}
 	mainLogger.Info("Configuration validation passed!")
+
+	// Initialize PoW system
+	mainLogger.Debug("Initializing PoW system...")
+	pow.InitPoW()
 
 	// Initialize database
 	mainLogger.Debug("Initializing database connection...")
@@ -78,6 +83,9 @@ func main() {
 // Fix middleware handlers
 // Add http.NewServeMux() for not accept extra endpoints.
 func setupRoutes(mux *http.ServeMux) {
+	mainLogger.Debug("Registering route: GET /api/v2/pow/challenge")
+	mux.HandleFunc("/api/v2/pow/challenge", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(handlers.PoWChallengeHandler))))
+
 	mainLogger.Debug("Registering route: POST /api/v2/register")
 	mux.HandleFunc("/api/v2/register", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.RateLimitMiddleware(handlers.RegisterHandler)))))
 
@@ -109,6 +117,10 @@ func setupRoutes(mux *http.ServeMux) {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))))
+
+	// Register PoW metrics endpoint
+	mainLogger.Debug("Registering route: GET /api/v2/pow/metrics")
+	mux.HandleFunc("/api/v2/pow/metrics", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(pow.GetMetricsHandler))))
 
 	// Request Path Whitelist: Handle unknown paths with 404
 	// Only registered paths are allowed, all others return 404

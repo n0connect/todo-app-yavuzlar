@@ -3,11 +3,13 @@ package handlers
 import (
 	"encoding/hex"
 	"net/http"
+	"strings"
 
 	"todo-app-backend/internal/auth"
 	"todo-app-backend/internal/encryption"
 	"todo-app-backend/internal/middleware"
 	"todo-app-backend/internal/models"
+	"todo-app-backend/internal/pow"
 	"todo-app-backend/internal/store"
 	"todo-app-backend/internal/utils"
 )
@@ -43,6 +45,23 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		// Empty body is OK - treat as generate AccountNumber only (confirm=false)
 		authLogger.Debug("Empty or invalid body, treating as AccountNumber generation request")
 		req.Confirm = false
+	}
+
+	// For Phase 1 (generate AccountNumber), we need PoW validation
+	if !req.Confirm && req.PoW == nil {
+		authLogger.Warn("PoW solution missing for Phase 1 registration")
+		http.Error(w, "Proof of work required", http.StatusPreconditionFailed)
+		return
+	}
+
+	// Validate PoW solution if present
+	if req.PoW != nil {
+		if !pow.ValidateSolution(req.PoW) {
+			authLogger.Warn("Invalid PoW solution provided")
+			http.Error(w, "Invalid proof of work", http.StatusPreconditionFailed)
+			return
+		}
+		authLogger.Debug("Valid PoW solution accepted")
 	}
 
 	// PHASE 1: Generate AccountNumber only (confirm=false)
@@ -236,6 +255,84 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	utils.EncodeJSONResponse(w, responseData, http.StatusCreated)
 	authLogger.LogResponse(http.StatusCreated, "Account created successfully")
+}
+
+// getClientIP extracts the client IP address from the request
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header first (for proxied requests)
+	forwarded := r.Header.Get("X-Forwarded-For")
+	if forwarded != "" {
+		// Take the first IP if multiple are present
+		parts := strings.Split(forwarded, ",")
+		if len(parts) > 0 {
+			ip := strings.TrimSpace(parts[0])
+			// Remove port if present
+			if colonIndex := strings.Index(ip, ":"); colonIndex != -1 {
+				ip = ip[:colonIndex]
+			}
+			return ip
+		}
+	}
+
+	// Check X-Real-IP header (another common proxy header)
+	realIP := r.Header.Get("X-Real-IP")
+	if realIP != "" {
+		return realIP
+	}
+
+	// Fall back to RemoteAddr
+	ip := r.RemoteAddr
+	if colonIndex := strings.Index(ip, ":"); colonIndex != -1 {
+		ip = ip[:colonIndex]
+	}
+	return ip
+}
+
+func PoWChallengeHandler(w http.ResponseWriter, r *http.Request) {
+	authLogger.LogRequest(r.Method, r.URL.Path, "N/A")
+	authLogger.Debug("Starting PoWChallengeHandler")
+
+	// Handle HEAD requests
+	if r.Method == http.MethodHead {
+		authLogger.Debug("Handling HEAD request for PoW challenge endpoint")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		authLogger.Warn("Invalid method for PoW challenge: %s", r.Method)
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Prevent caching of sensitive responses
+	w.Header().Set("Cache-Control", "no-store")
+
+	// Get client IP for rate limiting
+	clientIP := getClientIP(r)
+
+	// Generate a new PoW challenge
+	challenge, err := pow.GenerateChallenge(clientIP)
+	if err != nil {
+		authLogger.LogError("GenerateChallenge", err)
+		if strings.Contains(err.Error(), "rate limit exceeded") {
+			http.Error(w, "Too many requests", http.StatusTooManyRequests)
+			return
+		}
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	authLogger.Debug("Generated PoW challenge with difficulty: %d", challenge.Difficulty)
+
+	responseData := models.PoWChallengeResponse{
+		Success:   true,
+		Message:   "PoW challenge generated successfully",
+		Challenge: challenge,
+	}
+
+	utils.EncodeJSONResponse(w, responseData, http.StatusOK)
+	authLogger.LogResponse(http.StatusOK, "PoW challenge generated successfully")
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {

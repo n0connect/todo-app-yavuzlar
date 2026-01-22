@@ -50,6 +50,9 @@ const (
 	defaultServerWriteTimeout      = 15
 	defaultServerIdleTimeout       = 60
 	defaultServerMaxHeaderBytes    = 8192
+	defaultPoWDifficulty           = 22  // Increased from 18 to 22 for better security
+	minPoWDifficulty               = 20  // Minimum difficulty
+	maxPoWDifficulty               = 26  // Maximum difficulty (high load)
 )
 
 // ========================================
@@ -443,4 +446,28 @@ func GetServerIdleTimeout() time.Duration {
 // GetServerMaxHeaderBytes returns max header bytes
 func GetServerMaxHeaderBytes() int {
 	return getEnvIntDefault("SERVER_MAX_HEADER_BYTES", defaultServerMaxHeaderBytes)
+}
+
+// ========================================
+// PROOF OF WORK CONFIGURATION
+// ========================================
+
+// GetPoWDifficulty returns the PoW difficulty level
+func GetPoWDifficulty() int {
+	return getEnvIntDefault("POW_DIFFICULTY", defaultPoWDifficulty)
+}
+
+// DefaultPoWDifficulty returns the default PoW difficulty level
+func DefaultPoWDifficulty() int {
+	return defaultPoWDifficulty
+}
+
+// MinPoWDifficulty returns the minimum PoW difficulty level
+func MinPoWDifficulty() int {
+	return minPoWDifficulty
+}
+
+// MaxPoWDifficulty returns the maximum PoW difficulty level
+func MaxPoWDifficulty() int {
+	return maxPoWDifficulty
 }

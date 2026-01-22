@@ -1,4 +1,69 @@
 // ========================================
+// PROOF OF WORK HELPER FUNCTIONS
+// ========================================
+
+// Get PoW challenge from backend
+async function getPowChallenge() {
+    try {
+        const response = await fetchWithErrorHandling(`${API_BASE_URL}/pow/challenge`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+
+        if (!response) {
+            return null;
+        }
+
+        const data = await response.json();
+        if (!data || !data.success || !data.challenge) {
+            console.error('Invalid PoW challenge response');
+            return null;
+        }
+
+        return data.challenge;
+    } catch (error) {
+        console.error('Error getting PoW challenge:', error);
+        return null;
+    }
+}
+
+// Solve PoW challenge using Web Worker
+function solvePowChallenge(challenge) {
+    return new Promise((resolve, reject) => {
+        const worker = new Worker('js/pow-worker.js');
+
+        worker.postMessage({
+            challenge: challenge.challenge,
+            difficulty: challenge.difficulty,
+            salt: challenge.salt
+        });
+
+        worker.onmessage = function(e) {
+            if (e.data.success) {
+                resolve({
+                    challenge: challenge.challenge,
+                    solution: e.data.solution,
+                    timestamp: challenge.timestamp,
+                    ttl: challenge.ttl,
+                    difficulty: challenge.difficulty,
+                    salt: challenge.salt
+                });
+            } else {
+                reject(new Error(e.data.error || 'PoW solving failed'));
+            }
+            worker.terminate();
+        };
+
+        worker.onerror = function(error) {
+            reject(error);
+            worker.terminate();
+        };
+    });
+}
+
+// ========================================
 // AUTHENTICATION FUNCTIONS
 // ========================================
 
@@ -105,6 +170,7 @@ async function login() {
 let fakeAccountNumberInterval = null;
 let pendingRegistrationAccountNumber = null;
 let pendingRegistrationToken = null;  // Zero-trust: token from backend
+let pendingRegistrationPoW = null;    // PoW solution from Phase 1
 
 // Fake Account Number generation animation - runs continuously until copy is clicked
 function startFakeAccountNumberGeneration(accountNumberElement, successElement, accountNumberDisplay) {
@@ -178,16 +244,32 @@ async function copyAccountNumber() {
     // Animate to all asterisks
     await animateToMask(accountNumberElement);
     
-    // Get Account Number from backend (Phase 1 - no account creation)
-    successElement.textContent = 'Generating your special Account Number';
-    
+    // First, get PoW challenge from backend
+    successElement.textContent = 'Preparing security challenge...';
+
     try {
+        const challenge = await getPowChallenge();
+        if (!challenge) {
+            throw new Error('Failed to get PoW challenge');
+        }
+
+        successElement.textContent = `Solving security challenge (difficulty: ${challenge.difficulty})...`;
+
+        // Solve the PoW challenge
+        const powSolution = await solvePowChallenge(challenge);
+
+        successElement.textContent = 'Generating your special Account Number';
+
+        // Get Account Number from backend (Phase 1 - no account creation)
         const response = await fetchWithErrorHandling(`${API_BASE_URL}/register`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ confirm: false })
+            body: JSON.stringify({
+                confirm: false,
+                pow: powSolution
+            })
         });
 
         // If fetchWithErrorHandling returned null, it means error was handled and redirected
@@ -229,6 +311,8 @@ async function copyAccountNumber() {
         // Store pending AccountNumber and token for account creation on continue
         pendingRegistrationAccountNumber = realAccountNumber;
         pendingRegistrationToken = pendingToken;
+        // Also store the PoW solution for the confirmation step
+        pendingRegistrationPoW = powSolution;
         
         // Reveal the real AccountNumber with animation
         await revealRealAccountNumber(accountNumberElement, realAccountNumber);
@@ -381,9 +465,10 @@ async function continueWithAccountNumber() {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ 
-                confirm: true, 
-                pending_token: pendingRegistrationToken 
+            body: JSON.stringify({
+                confirm: true,
+                pending_token: pendingRegistrationToken,
+                pow: pendingRegistrationPoW
             })
         });
 
@@ -491,6 +576,7 @@ function cancelRegistration() {
     // Clear any pending state
     pendingRegistrationAccountNumber = null;
     pendingRegistrationToken = null;
+    pendingRegistrationPoW = null;
     
     // Return to main menu
     showMainMenu();

@@ -11,6 +11,30 @@ type LoginRequest struct {
 type RegisterRequest struct {
 	Confirm      bool   `json:"confirm"`       // false = generate AccountNumber only, true = create account
 	PendingToken string `json:"pending_token"` // required when confirm=true (contains the AccountNumber)
+	PoW          *PoWSolution `json:"pow,omitempty"` // Proof of work solution for registration
+}
+
+type PoWSolution struct {
+	Challenge string `json:"challenge"`
+	Solution  string `json:"solution"`
+	Timestamp int64  `json:"timestamp"`
+	TTL       int64  `json:"ttl"`
+	Difficulty int   `json:"difficulty"`
+	Salt       string `json:"salt"`
+}
+
+type PoWChallengeResponse struct {
+	Success   bool         `json:"success"`
+	Message   string       `json:"message"`
+	Challenge *PoWChallenge `json:"challenge,omitempty"`
+}
+
+type PoWChallenge struct {
+	Challenge  string `json:"challenge"`
+	Timestamp  int64  `json:"timestamp"`
+	Difficulty int    `json:"difficulty"`
+	TTL        int64  `json:"ttl"`
+	Salt       string `json:"salt"`
 }
 
 type LoginResponse struct {
