@@ -16,7 +16,7 @@ class EyeHoverAnimation {
         this.lastMousePos = { x: 0, y: 0 };
         this.lastMouseTime = Date.now();
         this.revealProgress = 0; // 0 to 1
-        
+
         // Zone configurations (in pixels)
         // Compact zones for precise control
         this.zones = {
@@ -24,12 +24,12 @@ class EyeHoverAnimation {
             middle: 51,   // fast scramble (2x)
             outer: 87     // responsive scramble
         };
-        
-        this.characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-        
+
+        this.characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-';
+
         // Deterministic reveal order (seeded random)
         this.revealOrder = [];
-        
+
         this.init();
     }
 

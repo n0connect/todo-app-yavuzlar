@@ -33,9 +33,21 @@ async function login() {
         return;
     }
 
-    // Validate format without revealing exact rules
-    if (accountNumberInput.length !== ACCOUNT_NUMBER_LEN || !ACCOUNT_NUMBER_REGEX.test(accountNumberInput)) {
+    // Normalize & validate account number format safely
+    const normalizedAccountNumber = String(accountNumberInput)
+        .normalize('NFKC')   // Unicode look-alike temizliği
+        .trim();             // Baştaki / sondaki gizli whitespace
+
+    if (
+        normalizedAccountNumber.length !== ACCOUNT_NUMBER_LEN ||
+        !ACCOUNT_NUMBER_REGEX.test(normalizedAccountNumber)
+    ) {
         errorElement.textContent = 'invalid format';
+        console.error('Invalid account number format', {
+            raw: accountNumberInput,
+            normalized: normalizedAccountNumber,
+            length: normalizedAccountNumber.length
+        });
         return;
     }
 
