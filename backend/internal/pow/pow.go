@@ -24,7 +24,7 @@ type RateLimiter struct {
 	maxTokens      int
 	refillTime     time.Time
 	refillInterval time.Duration
-	lastAccess     time.Time  // Cleanup için
+	lastAccess     time.Time  // For cleanup tracking
 	mutex          sync.Mutex
 }
 
@@ -68,7 +68,7 @@ var (
 	// Rate limiter for challenge requests per IP
 	challengeRateLimiters = make(map[string]*RateLimiter)
 	rateLimiterMutex      = sync.RWMutex{}
-	// Cleanup kontrolü için
+	// For cleanup control
 	cleanupRunning = false
 	cleanupMutex   = sync.Mutex{}
 )
@@ -198,7 +198,7 @@ func cleanupInactiveRateLimiters() {
 
 	for ip, limiter := range challengeRateLimiters {
 		limiter.mutex.Lock()
-		// 1 saatten fazla kullanılmamışsa sil
+		// Remove if inactive for more than 1 hour
 		if now.Sub(limiter.lastAccess) > 1*time.Hour {
 			delete(challengeRateLimiters, ip)
 			cleaned++
@@ -213,6 +213,12 @@ func cleanupInactiveRateLimiters() {
 
 // ValidateSolution validates a proof of work solution
 func ValidateSolution(solution *models.PoWSolution) bool {
+	if solution == nil {
+		powLogger.Warn("Nil PoW solution provided")
+		RecordValidation(false)
+		return false
+	}
+
 	powLogger.Debug("Validating PoW solution for challenge: %s", solution.Challenge[:8])
 
 	// Atomic validation - lock once, check everything
@@ -263,8 +269,8 @@ func ValidateSolution(solution *models.PoWSolution) bool {
 		entry.Used = true
 		powLogger.Info("Valid PoW solution accepted for challenge: %s", solution.Challenge[:8])
 	} else {
-		powLogger.Warn("Invalid PoW solution for challenge: %s (did not meet difficulty requirement)",
-			solution.Challenge[:8])
+		powLogger.Warn("Invalid PoW solution for challenge: %s (did not meet difficulty requirement: %d)",
+			solution.Challenge[:8], solution.Difficulty)
 	}
 
 	RecordValidation(result)

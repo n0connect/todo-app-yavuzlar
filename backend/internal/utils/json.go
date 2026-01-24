@@ -130,3 +130,31 @@ func WriteAPIError(w http.ResponseWriter, statusCode int, publicMsg string, logg
 	// Write generic error message to user
 	http.Error(w, publicMsg, statusCode)
 }
+
+// ReadRequestBody reads the request body and returns the bytes
+func ReadRequestBody(r *http.Request) ([]byte, error) {
+	maxBytes, err := maxRequestBodyBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	// Limit request body size to prevent memory exhaustion DoS
+	limitedReader := io.LimitReader(r.Body, int64(maxBytes))
+
+	bodyBytes, err := io.ReadAll(limitedReader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read request body: %w", err)
+	}
+
+	// Check if body exceeds size limit
+	if len(bodyBytes) >= maxBytes {
+		return nil, fmt.Errorf("request body too large (max %d bytes)", maxBytes)
+	}
+
+	return bodyBytes, nil
+}
+
+// MakeReadCloser creates an io.ReadCloser from a byte slice
+func MakeReadCloser(data []byte) io.ReadCloser {
+	return io.NopCloser(bytes.NewReader(data))
+}

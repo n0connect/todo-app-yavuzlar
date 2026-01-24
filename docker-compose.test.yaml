@@ -1,0 +1,74 @@
+# docker-compose.test.yaml - Test environment
+# Usage: ./build-test.sh test
+
+services:
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: todo-postgres-test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: todos_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  test-runner:
+    build:
+      context: .
+      dockerfile: test.Dockerfile
+    container_name: todo-test-runner
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    environment:
+      APP_ENV: test
+      LOG_LEVEL: error
+      DB_HOST: postgres-test
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: todos_test
+      DB_SSL_MODE: disable
+      JWT_SECRET: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      JWT_SECRET_MIN_LEN: "32"
+      JWT_EXPIRATION_MINUTES: "15"
+      JWT_ISSUER: "todo-app-backend"
+      JWT_AUDIENCE: "todo-app-frontend"
+      MASTER_KEY_ACTIVE: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      MASTER_KEY_ACTIVE_ID: "test-key-1"
+      ACCOUNT_LOOKUP_PEPPER: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      MAX_BASE64_LOGIN_LEN: "4096"
+      MAX_BASE64_TODO_LEN: "65536"
+      MAX_REQUEST_BODY_BYTES: "1048576"
+      MAX_JSON_DEPTH: "2"
+      MAX_TITLE_LENGTH: "1000"
+      MIN_TITLE_LENGTH: "1"
+      MAX_TAG_LENGTH: "6"
+      MAX_TAGS_PER_TODO: "10"
+      ARGON2_MEMORY_KIB: "16384"
+      ARGON2_TIME: "1"
+      ARGON2_PARALLELISM: "2"
+      ARGON2_SALT_LENGTH: "16"
+      ARGON2_HASH_LENGTH: "32"
+      PENDING_TOKEN_TTL_SEC: "300"
+      PENDING_CLEANUP_INTERVAL_SEC: "60"
+      PENDING_ID_BYTES: "16"
+      INTERNAL_ID_LENGTH: "24"
+      RATE_LIMIT_MAX_TOKENS: "1000"
+      RATE_LIMIT_REFILL_INTERVAL_SEC: "1"
+      RATE_LIMIT_CLEANUP_INTERVAL_SEC: "300"
+      RATE_LIMIT_MAX_BUCKETS: "10000"
+      BACKEND_PORT: "8080"
+      SERVER_READ_HEADER_TIMEOUT_SEC: "5"
+      SERVER_READ_TIMEOUT_SEC: "15"
+      SERVER_WRITE_TIMEOUT_SEC: "15"
+      SERVER_IDLE_TIMEOUT_SEC: "60"
+      SERVER_MAX_HEADER_BYTES: "8192"
+      ALLOWED_ORIGINS: "http://localhost:3000"
+    volumes:
+      - ./test-results:/test-results

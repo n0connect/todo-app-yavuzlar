@@ -18,16 +18,19 @@ type TokenBucket struct {
 	maxTokens  int
 	refillRate time.Duration
 	lastRefill time.Time
+	lastAccess time.Time // Track last access time for cleanup
 	mu         sync.Mutex
 }
 
 // NewTokenBucket creates a new token bucket
 func NewTokenBucket(maxTokens int, refillRate time.Duration) *TokenBucket {
+	now := time.Now()
 	return &TokenBucket{
 		tokens:     maxTokens,
 		maxTokens:  maxTokens,
 		refillRate: refillRate,
-		lastRefill: time.Now(),
+		lastRefill: now,
+		lastAccess: now,
 	}
 }
 
@@ -37,6 +40,7 @@ func (tb *TokenBucket) Allow() bool {
 	defer tb.mu.Unlock()
 
 	now := time.Now()
+	tb.lastAccess = now // Update last access time
 	elapsed := now.Sub(tb.lastRefill)
 
 	// Refill tokens based on elapsed time
@@ -144,11 +148,51 @@ func (rl *RateLimiter) cleanup() {
 // cleanupUnsafe removes old buckets without acquiring a lock
 // Caller must hold rl.mu.Lock()
 func (rl *RateLimiter) cleanupUnsafe() {
-	// Simple cleanup: if we have too many buckets, clear them
-	// In production, you might want more sophisticated cleanup
+	now := time.Now()
+	inactivityThreshold := 1 * time.Hour // Remove buckets inactive for 1 hour
+	cleaned := 0
+
+	// First pass: remove inactive buckets
+	for ip, bucket := range rl.buckets {
+		bucket.mu.Lock()
+		if now.Sub(bucket.lastAccess) > inactivityThreshold {
+			delete(rl.buckets, ip)
+			cleaned++
+		}
+		bucket.mu.Unlock()
+	}
+
+	// Second pass: if still over limit, remove oldest buckets
 	if len(rl.buckets) > rl.maxBuckets {
-		rl.buckets = make(map[string]*TokenBucket)
-		rateLimitLogger.Debug("RateLimiter: cleaned up buckets")
+		// Find oldest buckets and remove them
+		type bucketAge struct {
+			ip         string
+			lastAccess time.Time
+		}
+		ages := make([]bucketAge, 0, len(rl.buckets))
+		for ip, bucket := range rl.buckets {
+			bucket.mu.Lock()
+			ages = append(ages, bucketAge{ip: ip, lastAccess: bucket.lastAccess})
+			bucket.mu.Unlock()
+		}
+		// Sort by lastAccess (oldest first)
+		for i := 0; i < len(ages)-1; i++ {
+			for j := i + 1; j < len(ages); j++ {
+				if ages[i].lastAccess.After(ages[j].lastAccess) {
+					ages[i], ages[j] = ages[j], ages[i]
+				}
+			}
+		}
+		// Remove oldest buckets until we're under the limit
+		toRemove := len(rl.buckets) - rl.maxBuckets
+		for i := 0; i < toRemove && i < len(ages); i++ {
+			delete(rl.buckets, ages[i].ip)
+			cleaned++
+		}
+	}
+
+	if cleaned > 0 {
+		rateLimitLogger.Debug("RateLimiter: cleaned up %d inactive/old buckets (remaining: %d)", cleaned, len(rl.buckets))
 	}
 }
 

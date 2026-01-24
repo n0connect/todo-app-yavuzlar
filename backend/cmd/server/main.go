@@ -80,17 +80,20 @@ func main() {
 	log.Fatal(srv.ListenAndServe())
 }
 
-// Fix middleware handlers
-// Add http.NewServeMux() for not accept extra endpoints.
+// Setup routes with proper middleware chain
+// Using http.NewServeMux() for explicit route registration (rejects unregistered endpoints)
 func setupRoutes(mux *http.ServeMux) {
 	mainLogger.Debug("Registering route: GET /api/v2/pow/challenge")
 	mux.HandleFunc("/api/v2/pow/challenge", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(handlers.PoWChallengeHandler))))
 
 	mainLogger.Debug("Registering route: POST /api/v2/register")
-	mux.HandleFunc("/api/v2/register", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.RateLimitMiddleware(handlers.RegisterHandler)))))
+	mux.HandleFunc("/api/v2/register", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.PoWMiddleware(handlers.RegisterHandler)))))
 
 	mainLogger.Debug("Registering route: POST /api/v2/login")
 	mux.HandleFunc("/api/v2/login", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.RateLimitMiddleware(handlers.LoginHandler)))))
+
+	mainLogger.Debug("Registering route: POST /api/v2/logout")
+	mux.HandleFunc("/api/v2/logout", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(handlers.LogoutHandler))))
 
 	mainLogger.Debug("Registering route: GET/POST /api/v2/todos")
 	mux.HandleFunc("/api/v2/todos", middleware.SecurityHeadersMiddleware(middleware.CORSMiddleware(middleware.ContentTypeMiddleware(middleware.JWTMiddleware(func(w http.ResponseWriter, r *http.Request) {

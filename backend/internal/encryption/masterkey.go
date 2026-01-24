@@ -114,6 +114,13 @@ func HasOldMasterKeys() bool {
 	return len(masterKeys.old) > 0
 }
 
+func GetOldMasterKeys() map[string][]byte {
+	if err := InitMasterKeys(); err != nil {
+		return nil
+	}
+	return masterKeys.old
+}
+
 func decodeKeyMaterial(keyRaw string) ([]byte, error) {
 	if decoded, err := hex.DecodeString(keyRaw); err == nil && len(decoded) == 32 {
 		return decoded, nil

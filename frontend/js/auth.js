@@ -51,7 +51,7 @@ function solvePowChallenge(challenge) {
                     salt: challenge.salt
                 });
             } else {
-                reject(new Error(e.data.error || 'PoW solving failed'));
+                reject(new Error('Processing failed'));
             }
             worker.terminate();
         };
@@ -100,8 +100,8 @@ async function login() {
 
     // Normalize & validate account number format safely
     const normalizedAccountNumber = String(accountNumberInput)
-        .normalize('NFKC')   // Unicode look-alike temizliği
-        .trim();             // Baştaki / sondaki gizli whitespace
+        .normalize('NFKC')   // Unicode look-alike cleanup
+        .trim();             // Remove leading/trailing hidden whitespace
 
     if (
         normalizedAccountNumber.length !== ACCOUNT_NUMBER_LEN ||
@@ -253,7 +253,7 @@ async function copyAccountNumber() {
             throw new Error('Failed to get PoW challenge');
         }
 
-        successElement.textContent = `Solving security challenge (difficulty: ${challenge.difficulty})...`;
+        successElement.textContent = 'Securing your account...';
 
         // Solve the PoW challenge
         const powSolution = await solvePowChallenge(challenge);
@@ -441,34 +441,46 @@ async function continueWithAccountNumber() {
     const generatedAccountNumber = document.getElementById('generatedAccountNumber').textContent;
     const successElement = document.getElementById('registerSuccess');
     const errorElement = document.getElementById('registerError');
-    
+
     // Validate that we have a real AccountNumber (not masked)
     if (!generatedAccountNumber || generatedAccountNumber.includes('*') || generatedAccountNumber.length !== ACCOUNT_NUMBER_LEN) {
         showError('Please generate your account number first');
         return;
     }
-    
+
     // Zero-trust: We need the pending token from Phase 1
     if (!pendingRegistrationToken) {
         showError('Session expired. Please try again.');
         cancelRegistration();
         return;
     }
-    
-    successElement.textContent = 'creating your account...';
+
+    successElement.textContent = 'preparing security challenge...';
     errorElement.textContent = '';
-    
+
     try {
+        // SECURITY: Phase 2 requires separate PoW (prevents Phase 1 replay)
+        const challenge = await getPowChallenge();
+        if (!challenge) {
+            throw new Error('Failed to get PoW challenge for Phase 2');
+        }
+
+        successElement.textContent = 'securing your account...';
+        const powSolution = await solvePowChallenge(challenge);
+
+        successElement.textContent = 'creating your account...';
+
         // Phase 2: Create account using pending token (not Account Number from frontend)
         const response = await fetch(`${API_BASE_URL}/register`, {
             method: 'POST',
+            credentials: 'include', // Send cookies (HttpOnly cookie will be set)
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
                 confirm: true,
                 pending_token: pendingRegistrationToken,
-                pow: pendingRegistrationPoW
+                pow: powSolution
             })
         });
 
@@ -559,10 +571,24 @@ async function loginWithAccountNumber(accountNumber) {
     }
 }
 
-function logout() {
+async function logout() {
+    // Call logout endpoint to clear HttpOnly cookie
+    try {
+        await fetchWithErrorHandling(`${API_BASE_URL}/logout`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+    } catch (error) {
+        console.error('Logout API call failed:', error);
+        // Continue with client-side cleanup even if API fails
+    }
+
+    // Client-side cleanup
     userAccountNumber = null;
     sessionStorage.removeItem('userAccountNumber');
-    sessionStorage.removeItem('jwtToken');
+    sessionStorage.removeItem('jwtToken'); // Legacy token cleanup
     todos = [];
     showMainMenu();
     document.getElementById('accountNumberInput').value = '';

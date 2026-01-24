@@ -35,3 +35,9 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+
+# Test results
+test-results/
+*.coverprofile
+coverage.out
+coverage.txt

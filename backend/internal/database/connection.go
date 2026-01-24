@@ -31,7 +31,7 @@ func Init() {
 	}
 
 	dbLogger.Info("Initializing database connection...")
-	dbLogger.Info("Initializing does not guarantee your config ise secure generated!")
+	dbLogger.Info("Initialization does not guarantee your config is securely generated!")
 
 	// Use config functions for consistency
 	dbHost := config.GetDBHost()
@@ -244,6 +244,14 @@ func ValidateStartupConfig() error {
 		// Validate SSL mode
 		if config.GetDBSSLMode() == "disable" {
 			return fmt.Errorf("DB_SSL_MODE cannot be 'disable' in production mode")
+		}
+
+		// SECURITY: Production behind reverse proxy must configure trusted proxies
+		// Without this, X-Forwarded-For headers are ignored and IP-based security fails
+		if strings.TrimSpace(config.GetTrustedProxies()) == "" {
+			dbLogger.Warn("TRUSTED_PROXIES not configured in production mode")
+			dbLogger.Warn("If running behind reverse proxy (nginx/cloudflare), rate limiting and IP-based security will use proxy IP instead of client IP")
+			dbLogger.Warn("Set TRUSTED_PROXIES to comma-separated list of proxy IPs/CIDRs (e.g., '10.0.0.0/8,172.16.0.0/12')")
 		}
 
 		// Validate log level (not debug in production)

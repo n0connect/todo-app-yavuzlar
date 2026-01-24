@@ -5,7 +5,7 @@
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-4169E1?style=flat&logo=postgresql)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker)
 ![Nginx](https://img.shields.io/badge/Nginx-Alpine-009639?style=flat&logo=nginx)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat)
+![License](https://img.shields.io/badge/License-GPL%203.0-blue?style=flat)
 
 Secure todo application with Bearer CSPRNG token-based AccountNumber-only authentication and per-user encryption.
 
@@ -45,7 +45,8 @@ This application is a todo management system that authenticates using only crypt
 - Rate limiting (IP-based, for login/register)
 - Proof of Work (PoW) for registration endpoint protection
 - Log masking (AccountNumber and sensitive information masked)
-- Session storage (tokens in sessionStorage instead of localStorage)
+- HttpOnly cookies (JWT stored in __Host-Session cookie, XSS-protected)
+- SameSite=Strict cookies (CSRF protection)
 - Trusted proxy-aware client IP extraction for security decisions
 
 **Functional:**
@@ -70,7 +71,7 @@ This application is a todo management system that authenticates using only crypt
 ┌─────────────────────────────────────────────────────────────┐
 │ FRONTEND (Nginx + SPA)                                      │
 │ - index.html, styles.css, js/{app,auth,todo,ui,utils}.js    │
-│ - sessionStorage (JWT token, AccountNumber)                 │
+│ - HttpOnly cookie (__Host-Session) for JWT authentication   │
 │ - Progressive AccountNumber reveal                          │
 └──────────────────────┬──────────────────────────────────────┘
                        │ HTTP (Same-Origin Proxy)
@@ -128,64 +129,6 @@ AccountNumber is generated with CSPRNG and Base64URL (no padding):
 1. `OpenSSL RAND_bytes(32 bytes)` → 256-bit entropy
 2. `base64.RawURLEncoding.EncodeToString()` → 43 characters Base64URL
 3. Result: 43 characters (A-Z, a-z, 0-9, -, _)
-
-### AccountNumber Storage in Database
-
-AccountNumber is NEVER stored in plaintext:
-
-**HMAC Lookup (Fast Lookup):**
-```
-AccountNumber: "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq"
-    │
-    ▼
-HMAC-SHA256(ACCOUNT_LOOKUP_PEPPER, AccountNumber)
-    │
-    ▼
-account_lookup: "b37e5a5c1f4e510a..." (64 hex chars)
-  ├── Fast lookup (indexed)
-  └── One-way function (cannot reverse)
-```
-
-**Argon2id Hash (Verification):**
-```
-AccountNumber: "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq"
-    │
-    ▼
-Argon2id(AccountNumber)
-  ├── Memory: ARGON2_MEMORY_KIB
-  ├── Time: ARGON2_TIME
-  ├── Parallelism: ARGON2_PARALLELISM
-  └── Format: "$argon2id$v=19$m=<memory>,t=<time>,p=<parallelism>$salt$hash"
-    │
-    ▼
-account_hash: "$argon2id$v=19$m=<memory>,t=<time>,p=<parallelism>$..." (stored)
-  ├── Verification only
-  └── Cannot reverse
-```
-
-### Rate Limiting
-
-Token Bucket algorithm is used (config-driven):
-- Capacity: `RATE_LIMIT_MAX_TOKENS`
-- Refill rate: `RATE_LIMIT_REFILL_INTERVAL_SEC`
-- Applied to: `/api/v2/login`, `/api/v2/register`
-- IP-based tracking
-- Response: `429 Too Many Requests`
-
-### Log Masking
-
-AccountNumber and sensitive information are masked in logs:
-```
-AccountNumber: "x1_Op2u1bEokj79-HKY5V_EmOe1ATTDq"
-    │
-    ▼
-MaskAccountNumber()
-    │
-    ▼
-Log output: "****************************ATTDq"
-  ├── Last 4 characters visible
-  └── Rest masked with asterisks
-```
 
 ### Encryption Architecture
 
@@ -274,7 +217,7 @@ PURPOSE: 0x01=Encryption
 ```bash
 # Configure .env values, generate secrets, then build/test
 ./setup.sh
-./build.sh --clean
+./run.sh --clean
 ```
 
 ### Environment Variables
@@ -311,7 +254,7 @@ PURPOSE: 0x01=Encryption
 | `MAX_TAGS_PER_TODO` | Max tags per todo | `10` | Integer |
 | `ARGON2_MEMORY_KIB` | Argon2 memory cost (KiB) | `65536` | Integer |
 | `ARGON2_TIME` | Argon2 time cost | `3` | Integer |
-| `ARGON2_PARALLELISM` | Argon2 parallelism | `2` | Integer |
+| `ARGON2_PARALLELISM` | Argon2 parallelism | `4` | Integer |
 | `ARGON2_SALT_LENGTH` | Argon2 salt length (bytes) | `16` | Integer |
 | `ARGON2_HASH_LENGTH` | Argon2 hash length (bytes) | `32` | Integer |
 | `PENDING_TOKEN_TTL_SEC` | Pending token TTL (seconds) | `300` | Integer |
@@ -338,6 +281,100 @@ PURPOSE: 0x01=Encryption
 
 Note: Legacy `ENCRYPTION_KEY` fallback has been removed. Use `MASTER_KEY_ACTIVE` and optional `MASTER_KEY_OLD` for rotation and migration.
 
+### Master Key Rotation Procedure
+
+Master key rotation allows you to change the encryption key without losing access to existing encrypted data. This is critical for security compliance and incident response.
+
+**Pre-requisites:**
+- Generate new master key: `openssl rand -hex 32`
+- Plan maintenance window (rotation requires application restart)
+- Backup database before rotation
+
+**Rotation Steps:**
+
+1. **Add Old Key to Configuration**
+   ```bash
+   # Current active key
+   MASTER_KEY_ACTIVE_ID=key-2024-01
+   MASTER_KEY_ACTIVE=<current-key-hex>
+
+   # No old keys yet
+   MASTER_KEY_OLD=
+   ```
+
+2. **Generate New Key and Update Configuration**
+   ```bash
+   # Generate new key
+   openssl rand -hex 32
+
+   # Update .env - move active to old, set new as active
+   MASTER_KEY_ACTIVE_ID=key-2025-01
+   MASTER_KEY_ACTIVE=<new-key-hex>
+   MASTER_KEY_OLD=key-2024-01:<old-key-hex>
+   ```
+
+3. **Restart Application**
+   - Application will use new key for encryption
+   - Old key will be used for decryption (automatic fallback)
+   - No data migration required immediately
+
+4. **Re-encrypt Existing Data (Optional but Recommended)**
+   Currently, automatic re-encryption is not implemented. Existing data will remain encrypted with old key until manually updated. To force re-encryption:
+   - Users must update their todos (triggers re-encryption with new key)
+   - Or implement a migration script to re-encrypt all data
+
+5. **Remove Old Key (After Verification)**
+   Only remove old key after confirming all data is re-encrypted:
+   ```bash
+   MASTER_KEY_ACTIVE_ID=key-2025-01
+   MASTER_KEY_ACTIVE=<new-key-hex>
+   MASTER_KEY_OLD=  # Empty after migration complete
+   ```
+
+**Multiple Old Keys:**
+You can keep multiple old keys for gradual migration:
+```bash
+MASTER_KEY_OLD=key-2024-01:<key1-hex>,key-2023-12:<key2-hex>,key-2023-11:<key3-hex>
+```
+
+**Security Notes:**
+- Old keys should have limited lifetime (recommend max 90 days)
+- Monitor decryption with old keys (indicates pending migration)
+- Never remove old keys before data migration verification
+- Store old keys securely even after removal (disaster recovery)
+
+### Production Performance Tuning
+
+#### Argon2id Parameters
+
+Default Argon2id parameters are tuned for production with 100-200 concurrent users following OWASP 2023 recommendations:
+
+- `ARGON2_MEMORY_KIB=65536` (64MB) - recommended minimum for security
+- `ARGON2_TIME=3` - balance between security and performance
+- `ARGON2_PARALLELISM=4` - utilize multi-core CPUs
+
+**Memory Impact:**
+Each login/registration consumes 64MB × parallelism = 256MB RAM during hash computation. For 100 concurrent login attempts: ~25GB RAM burst.
+
+**Tuning for High Traffic (1000+ concurrent users):**
+
+Option 1: Reduce parameters (trade security for performance)
+```bash
+ARGON2_MEMORY_KIB=32768  # 32MB (still secure but faster)
+ARGON2_TIME=2
+ARGON2_PARALLELISM=2
+```
+
+Option 2: Implement request queueing (recommended)
+- Add rate limiting queue for login/register endpoints
+- Process Argon2id operations with worker pool
+- Maintain security without reducing parameters
+
+**Monitoring:**
+- Track Argon2id operation latency (should be 100-500ms)
+- Monitor memory usage during peak traffic
+- Alert if latency exceeds 1000ms (indicates resource contention)
+
 ## API Reference
 
 ### JWT Authentication
@@ -346,7 +383,8 @@ Protected endpoints require `Authorization: Bearer <token>` header. Token expira
 ### Endpoints
 
 - `POST /api/v2/register` - Generate AccountNumber (Phase 1) or create account (Phase 2)
-- `POST /api/v2/login` - Login with AccountNumber
+- `POST /api/v2/login` - Login with AccountNumber (sets HttpOnly cookie)
+- `POST /api/v2/logout` - Logout and clear session cookie
 - `GET /api/v2/todos` - Get all todos (JWT required)
 - `POST /api/v2/todos` - Create todo (JWT required)
 - `PUT /api/v2/todos/{id}` - Update todo (JWT required)
@@ -381,7 +419,7 @@ Protected endpoints require `Authorization: Bearer <token>` header. Token expira
 - **Nginx**: https://nginx.org/
 - **Docker**: https://www.docker.com/
 - **GORM**: https://gorm.io/
-- **Web Storage API**: https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API (SessionStorage)
+- **HTTP Cookies**: https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies (HttpOnly, SameSite)
 - **CORS**: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
 - **Mullvad VPN**: AccountNumber-only authentication model
 - **OWASP**: Security best practices

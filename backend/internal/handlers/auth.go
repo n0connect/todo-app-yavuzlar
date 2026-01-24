@@ -47,21 +47,11 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		req.Confirm = false
 	}
 
-	// For Phase 1 (generate AccountNumber), we need PoW validation
+	// For Phase 1 (generate AccountNumber), PoW validation is done by middleware
 	if !req.Confirm && req.PoW == nil {
 		authLogger.Warn("PoW solution missing for Phase 1 registration")
 		http.Error(w, "Proof of work required", http.StatusPreconditionFailed)
 		return
-	}
-
-	// Validate PoW solution if present
-	if req.PoW != nil {
-		if !pow.ValidateSolution(req.PoW) {
-			authLogger.Warn("Invalid PoW solution provided")
-			http.Error(w, "Invalid proof of work", http.StatusPreconditionFailed)
-			return
-		}
-		authLogger.Debug("Valid PoW solution accepted")
 	}
 
 	// PHASE 1: Generate AccountNumber only (confirm=false)
@@ -137,6 +127,21 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	// PHASE 2: Create account (confirm=true)
 	// ZERO-TRUST: Verify pending token and extract AccountNumber from it
 	authLogger.Debug("Phase 2: Confirming account creation")
+
+	// SECURITY: Phase 2 requires PoW validation (separate from Phase 1)
+	// This prevents Phase 1 PoW replay and ensures fresh proof-of-work for expensive Argon2id
+	if req.PoW == nil {
+		authLogger.Warn("PoW solution missing for Phase 2 registration")
+		http.Error(w, "Proof of work required", http.StatusPreconditionFailed)
+		return
+	}
+
+	// Validate Phase 2 PoW solution (must be different from Phase 1)
+	if !pow.ValidateSolution(req.PoW) {
+		authLogger.Warn("Invalid PoW solution for Phase 2 registration")
+		http.Error(w, "Invalid proof of work", http.StatusForbidden)
+		return
+	}
 
 	if req.PendingToken == "" {
 		authLogger.Warn("No pending token provided for account confirmation")
@@ -244,6 +249,11 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		utils.EncodeJSONResponse(w, responseData, http.StatusCreated)
 		return
 	}
+
+	// SECURITY: Set HttpOnly cookie (primary auth method for browsers - XSS protection)
+	// Token also returned in response for API client compatibility
+	auth.SetAuthCookie(w, token)
+	authLogger.Debug("Set HttpOnly authentication cookie for newly registered user UUID: %s", internalUUID)
 
 	// SECURITY: Don't return AccountNumber in response (already shown to user in Phase 1)
 	// Prevents network sniffing and reduces information leakage
@@ -397,13 +407,13 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		authLogger.Warn("Login failed: user not found")
 		// SECURITY: Perform dummy hash verification to prevent timing attack
 		// This ensures user existence cannot be determined by response time
+		// Even though OpenSSL Argon2id is constant-time within verification,
+		// the absence of verification creates a timing side-channel
 		auth.PerformDummyHashVerification(req.AccountNumber)
 		utils.EncodeJSONResponse(w, models.LoginResponse{Success: false, Message: "Invalid credentials"}, http.StatusUnauthorized)
 		return
 	}
-	// IDK - If openssl support constant time computation for argon2id hash
-	// then why we prefer old-school and not secure dummy-hash verification ?
-	// Removed old-school coded parts. Because attack-surface plane is much smaller.
+
 	// Verify AccountNumber hash
 	if err := auth.VerifyAccountNumberHash(user.AccountHash, req.AccountNumber); err != nil {
 		authLogger.Warn("Login failed: AccountNumber hash verification failed")
@@ -423,6 +433,11 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	authLogger.Debug("Successfully generated JWT token for user UUID: %s", user.UUID)
+
+	// SECURITY: Set HttpOnly cookie (primary auth method for browsers - XSS protection)
+	// Token also returned in response for API client compatibility
+	auth.SetAuthCookie(w, token)
+	authLogger.Debug("Set HttpOnly authentication cookie for user UUID: %s", user.UUID)
 
 	responseData := models.LoginResponse{
 		Success: true,

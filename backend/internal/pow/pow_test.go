@@ -7,32 +7,48 @@ import (
 	"testing"
 	"time"
 
+	"todo-app-backend/internal/config"
 	"todo-app-backend/internal/models"
 )
 
 func TestChallengeLifecycle(t *testing.T) {
 	InitPoW()
-	
+
 	// Generate challenge
 	challenge, err := GenerateChallenge("192.168.1.1")
 	if err != nil {
 		t.Fatalf("Failed to generate challenge: %v", err)
 	}
-	
+
+	// Verify challenge properties
+	if challenge.Challenge == "" {
+		t.Fatal("Challenge string is empty")
+	}
+
+	if challenge.Salt == "" {
+		t.Fatal("Salt is empty")
+	}
+
+	// Check that difficulty is within expected range (with new default of 22)
+	if challenge.Difficulty < config.MinPoWDifficulty() || challenge.Difficulty > config.MaxPoWDifficulty() {
+		t.Fatalf("Difficulty out of expected range [%d-%d]: %d",
+			config.MinPoWDifficulty(), config.MaxPoWDifficulty(), challenge.Difficulty)
+	}
+
 	// Verify challenge is stored
 	key := challenge.Challenge + challenge.Salt
 	challengeMutex.RLock()
 	entry, exists := issuedChallenges[key]
 	challengeMutex.RUnlock()
-	
+
 	if !exists {
 		t.Fatal("Challenge not stored")
 	}
-	
+
 	if entry.Used {
 		t.Fatal("New challenge marked as used")
 	}
-	
+
 	if time.Now().After(entry.ExpiresAt) {
 		t.Fatal("Challenge already expired")
 	}

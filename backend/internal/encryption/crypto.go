@@ -11,8 +11,8 @@ import (
 
 var cryptoLogger = utils.NewLogger("CRYPTO")
 
-// EncryptWithKey encrypts data: first base64 encode, then AES encrypt
-// Flow: raw data -> base64 encode -> AES encrypt -> base64 encode (for storage)
+// EncryptWithKey encrypts data with AES-256-GCM
+// Flow: raw data -> AES encrypt -> base64 encode (for storage)
 func EncryptWithKey(text string, key []byte) (string, error) {
 	cryptoLogger.Debug("EncryptWithKey: starting encryption, input length: %d", len(text))
 
@@ -20,26 +20,22 @@ func EncryptWithKey(text string, key []byte) (string, error) {
 		return "", fmt.Errorf("invalid key length")
 	}
 
-	// Step 1: Base64 encode the raw text first
-	base64Encoded := base64.StdEncoding.EncodeToString([]byte(text))
-	cryptoLogger.Debug("EncryptWithKey: base64 encoded, length: %d", len(base64Encoded))
-
-	// Step 2: AES encrypt the base64 encoded string
-	ciphertext, err := cryptoengine.EncryptAES256GCM(key, []byte(base64Encoded), nil)
+	// AES encrypt the raw text
+	ciphertext, err := cryptoengine.EncryptAES256GCM(key, []byte(text), nil)
 	if err != nil {
 		cryptoLogger.LogError("EncryptAES256GCM", err)
 		return "", err
 	}
 	cryptoLogger.Debug("EncryptWithKey: AES encryption completed, ciphertext length: %d", len(ciphertext))
 
-	// Step 3: Base64 encode the encrypted data for storage
+	// Base64 encode the encrypted data for storage
 	result := base64.StdEncoding.EncodeToString(ciphertext)
-	cryptoLogger.Debug("EncryptWithKey: final base64 encoding completed, result length: %d", len(result))
+	cryptoLogger.Debug("EncryptWithKey: base64 encoding completed, result length: %d", len(result))
 	return result, nil
 }
 
-// DecryptWithKey decrypts data: AES decrypt, then base64 decode
-// Flow: encrypted data -> base64 decode -> AES decrypt -> base64 decode -> raw data
+// DecryptWithKey decrypts data with AES-256-GCM
+// Flow: encrypted data -> base64 decode -> AES decrypt -> raw data
 func DecryptWithKey(encryptedText string, key []byte) (string, error) {
 	cryptoLogger.Debug("DecryptWithKey: starting decryption, input length: %d", len(encryptedText))
 
@@ -47,29 +43,21 @@ func DecryptWithKey(encryptedText string, key []byte) (string, error) {
 		return "", fmt.Errorf("invalid key length")
 	}
 
-	// Step 1: Base64 decode the stored encrypted data
+	// Base64 decode the stored encrypted data
 	data, err := base64.StdEncoding.DecodeString(encryptedText)
 	if err != nil {
-		cryptoLogger.LogError("Base64 decode (step 1)", err)
+		cryptoLogger.LogError("Base64 decode", err)
 		return "", err
 	}
 	cryptoLogger.Debug("DecryptWithKey: base64 decoded, data length: %d", len(data))
 
-	// Step 2: AES decrypt
-	base64Encoded, err := cryptoengine.DecryptAES256GCM(key, data, nil)
+	// AES decrypt
+	plaintext, err := cryptoengine.DecryptAES256GCM(key, data, nil)
 	if err != nil {
 		cryptoLogger.LogError("DecryptAES256GCM", err)
 		return "", err
 	}
-	cryptoLogger.Debug("DecryptWithKey: AES decryption completed, base64 string length: %d", len(base64Encoded))
-
-	// Step 3: Base64 decode to get original text
-	plaintext, err := base64.StdEncoding.DecodeString(string(base64Encoded))
-	if err != nil {
-		cryptoLogger.LogError("Base64 decode (step 2)", err)
-		return "", fmt.Errorf("failed to decode base64: %w", err)
-	}
-	cryptoLogger.Debug("DecryptWithKey: final base64 decode completed, plaintext length: %d", len(plaintext))
+	cryptoLogger.Debug("DecryptWithKey: AES decryption completed, plaintext length: %d", len(plaintext))
 
 	return string(plaintext), nil
 }

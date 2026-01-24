@@ -9,22 +9,24 @@ let userAccountNumber = null;
 let currentFilter = 'all';
 let todos = [];
 
-// Get authentication headers with JWT token
+// Get authentication headers
+// SECURITY: Now using HttpOnly cookies (primary) + Bearer token fallback (API clients)
+// Cookie is sent automatically by browser (credentials: 'include' required)
 function getAuthHeaders() {
     const headers = {
         'Content-Type': 'application/json'
     };
-    
-    // JWT token required for authentication (stored in sessionStorage, not localStorage)
+
+    // LEGACY: Support old clients that use Authorization header
+    // Modern clients use HttpOnly cookie (more secure - XSS protection)
     const token = sessionStorage.getItem('jwtToken');
-    console.log('getAuthHeaders: token exists:', !!token, 'length:', token ? token.length : 0);
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
-        console.log('getAuthHeaders: Authorization header set');
+        console.log('getAuthHeaders: Using legacy Authorization header (consider migrating to cookie-only)');
     } else {
-        console.warn('getAuthHeaders: No JWT token found');
+        console.log('getAuthHeaders: Using HttpOnly cookie authentication');
     }
-    
+
     return headers;
 }
 
@@ -200,15 +202,22 @@ async function handleErrorResponse(response, context = '') {
 }
 
 // Fetch wrapper with automatic error handling and status page redirects
+// SECURITY: Automatically includes credentials (HttpOnly cookies) in all requests
 async function fetchWithErrorHandling(url, options = {}) {
     try {
-        const response = await fetch(url, options);
-        
+        // Ensure credentials are included (required for HttpOnly cookies)
+        const fetchOptions = {
+            ...options,
+            credentials: 'include', // Send cookies with every request
+        };
+
+        const response = await fetch(url, fetchOptions);
+
         if (!response.ok) {
             await handleErrorResponse(response, url);
             return null; // Return null on error to prevent further processing
         }
-        
+
         return response;
     } catch (error) {
         // Network error - redirect to 500 error page immediately
