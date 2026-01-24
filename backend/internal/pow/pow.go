@@ -73,6 +73,15 @@ var (
 	cleanupMutex   = sync.Mutex{}
 )
 
+// truncateForLogging safely returns the first 8 characters of a string for logging
+// Prevents panic from unsafe slice bounds when string is shorter than 8 chars
+func truncateForLogging(s string) string {
+	if len(s) > 8 {
+		return s[:8]
+	}
+	return s
+}
+
 // GenerateChallenge creates a new proof of work challenge
 // ip parameter is used for rate limiting
 func GenerateChallenge(ip string) (*models.PoWChallenge, error) {
@@ -138,7 +147,7 @@ func GenerateChallenge(ip string) (*models.PoWChallenge, error) {
 	challengeMutex.Unlock()
 
 	powLogger.Info("Stored PoW challenge for IP: %s, challenge: %s, expires: %s",
-		ip, challengeStr[:8], now.Add(time.Duration(ttl)*time.Second).Format(time.RFC3339))
+		ip, truncateForLogging(challengeStr), now.Add(time.Duration(ttl)*time.Second).Format(time.RFC3339))
 
 	RecordChallengeIssued()
 	return challengeObj, nil
@@ -219,7 +228,7 @@ func ValidateSolution(solution *models.PoWSolution) bool {
 		return false
 	}
 
-	powLogger.Debug("Validating PoW solution for challenge: %s", solution.Challenge[:8])
+	powLogger.Debug("Validating PoW solution for challenge: %s", truncateForLogging(solution.Challenge))
 
 	// Atomic validation - lock once, check everything
 	challengeKey := solution.Challenge + solution.Salt
@@ -230,14 +239,14 @@ func ValidateSolution(solution *models.PoWSolution) bool {
 	// Check if challenge exists
 	entry, exists := issuedChallenges[challengeKey]
 	if !exists {
-		powLogger.Warn("Unknown PoW challenge provided: %s", solution.Challenge[:8])
+		powLogger.Warn("Unknown PoW challenge provided: %s", truncateForLogging(solution.Challenge))
 		RecordValidation(false)
 		return false
 	}
 
 	// Check if already used (replay attack)
 	if entry.Used {
-		powLogger.Warn("PoW challenge already used (replay attack): %s", solution.Challenge[:8])
+		powLogger.Warn("PoW challenge already used (replay attack): %s", truncateForLogging(solution.Challenge))
 		RecordReplayAttempt()
 		RecordValidation(false)
 		return false
@@ -246,7 +255,7 @@ func ValidateSolution(solution *models.PoWSolution) bool {
 	// Check expiration
 	if time.Now().After(entry.ExpiresAt) {
 		powLogger.Warn("PoW solution expired for challenge: %s (expired at: %s)",
-			solution.Challenge[:8], entry.ExpiresAt.Format(time.RFC3339))
+			truncateForLogging(solution.Challenge), entry.ExpiresAt.Format(time.RFC3339))
 		delete(issuedChallenges, challengeKey) // Cleanup expired
 		RecordExpired()
 		RecordValidation(false)
@@ -267,10 +276,10 @@ func ValidateSolution(solution *models.PoWSolution) bool {
 	if result {
 		// Mark as used BEFORE releasing lock
 		entry.Used = true
-		powLogger.Info("Valid PoW solution accepted for challenge: %s", solution.Challenge[:8])
+		powLogger.Info("Valid PoW solution accepted for challenge: %s", truncateForLogging(solution.Challenge))
 	} else {
 		powLogger.Warn("Invalid PoW solution for challenge: %s (did not meet difficulty requirement: %d)",
-			solution.Challenge[:8], solution.Difficulty)
+			truncateForLogging(solution.Challenge), solution.Difficulty)
 	}
 
 	RecordValidation(result)
