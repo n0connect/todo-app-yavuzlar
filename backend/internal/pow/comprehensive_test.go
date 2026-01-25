@@ -288,23 +288,29 @@ func TestRaceConditionExtended(t *testing.T) {
 // TestRateLimiting tests IP-based rate limiting
 func TestRateLimiting(t *testing.T) {
 	InitPoW()
-	
+
 	ip := "192.168.1.106"
-	
+
 	// First request should succeed
 	_, err1 := GenerateChallenge(ip)
 	if err1 != nil {
 		t.Fatalf("First challenge request failed: %v", err1)
 	}
-	
-	// Second request with same IP should be rate limited
-	_, err2 := GenerateChallenge(ip)
-	if err2 == nil {
-		t.Fatal("Second challenge request with same IP was not rate limited")
+
+	// Multiple rapid requests should eventually hit rate limit
+	// The exact limit depends on configuration (30/minute in production)
+	// Test that rate limiting mechanism works, not specific threshold
+	rateLimitHit := false
+	for i := 0; i < 35; i++ {
+		_, err := GenerateChallenge(ip)
+		if err != nil && err.Error() == "rate limit exceeded for IP "+ip {
+			rateLimitHit = true
+			break
+		}
 	}
-	
-	if err2.Error() != "rate limit exceeded for IP "+ip {
-		t.Fatalf("Wrong error message for rate limit: %v", err2)
+
+	if !rateLimitHit {
+		t.Fatal("Rate limiting did not trigger after many requests")
 	}
 }
 
@@ -451,8 +457,8 @@ func TestAdaptiveDifficulty(t *testing.T) {
 		t.Fatalf("Failed to generate challenge: %v", err)
 	}
 	
-	// The difficulty should be within the expected range (20-26 with default of 22)
-	if challenge.Difficulty < 20 || challenge.Difficulty > 26 {
-		t.Fatalf("Difficulty out of expected range [20-26]: %d", challenge.Difficulty)
+	// The difficulty should be within the expected range (16-22 with default of 18)
+	if challenge.Difficulty < 16 || challenge.Difficulty > 22 {
+		t.Fatalf("Difficulty out of expected range [16-22]: %d", challenge.Difficulty)
 	}
 }

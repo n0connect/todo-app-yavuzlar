@@ -56,9 +56,9 @@ const (
 	defaultServerWriteTimeout      = 15
 	defaultServerIdleTimeout       = 60
 	defaultServerMaxHeaderBytes    = 8192
-	defaultPoWDifficulty           = 22  // Increased from 18 to 22 for better security
-	minPoWDifficulty               = 20  // Minimum difficulty
-	maxPoWDifficulty               = 26  // Maximum difficulty (high load)
+	defaultPoWDifficulty           = 18  // Balanced for browser JS performance
+	minPoWDifficulty               = 16  // Minimum difficulty
+	maxPoWDifficulty               = 22  // Maximum difficulty (high load)
 )
 
 // ========================================

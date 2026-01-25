@@ -41,7 +41,12 @@ function solvePowChallenge(challenge) {
         });
 
         worker.onmessage = function(e) {
-            if (e.data.success) {
+            // Ignore progress updates, only process success/failure
+            if (e.data.progress) {
+                return;  // Continue computing
+            }
+
+            if (e.data.success === true) {
                 resolve({
                     challenge: challenge.challenge,
                     solution: e.data.solution,
@@ -50,10 +55,11 @@ function solvePowChallenge(challenge) {
                     difficulty: challenge.difficulty,
                     salt: challenge.salt
                 });
-            } else {
+                worker.terminate();
+            } else if (e.data.success === false) {
                 reject(new Error('Processing failed'));
+                worker.terminate();
             }
-            worker.terminate();
         };
 
         worker.onerror = function(error) {

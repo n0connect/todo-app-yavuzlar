@@ -91,8 +91,9 @@ func GenerateChallenge(ip string) (*models.PoWChallenge, error) {
 	rateLimiterMutex.Lock()
 	limiter, exists := challengeRateLimiters[ip]
 	if !exists {
-		// Create new rate limiter: 1 challenge per 5 minutes
-		limiter = NewRateLimiter(1, 5*time.Minute)
+		// Create new rate limiter: 30 challenges per minute (refills every 2 seconds)
+		// PoW challenges are low-risk (CPU-bound), generous limit allows user retries
+		limiter = NewRateLimiter(30, 1*time.Minute)
 		challengeRateLimiters[ip] = limiter
 		powLogger.Debug("Created new rate limiter for IP: %s", ip)
 	}
